@@ -9,7 +9,6 @@ import {
 import playerState from '@/store/player/state'
 import { getTimelineDuration } from '@/core/player/timeline'
 import {
-  formatNowPlayingTitleLine,
   getCurrentTrack,
   getTrackDuration,
   initTrackInfo as handleInitTrackInfo,
@@ -101,8 +100,13 @@ const updateMetaInfo = async(mInfo: LX.Player.MusicInfo, lyric?: string, isPlayi
   let singer: string
   let album: string | undefined
   if (Platform.OS == 'ios') {
-    name = formatNowPlayingTitleLine(mInfo.name ?? 'Unknow', mInfo.singer ?? '')
-    singer = lyric ?? ''
+    if (!state.isPlaying || lyric == null) {
+      name = mInfo.name ?? 'Unknow'
+      singer = mInfo.singer ?? 'Unknow'
+    } else {
+      name = lyric
+      singer = `${mInfo.name}${mInfo.singer ? ` - ${mInfo.singer}` : ''}`
+    }
     album = ''
   } else if (!state.isPlaying || lyric == null) {
     name = mInfo.name ?? 'Unknow'

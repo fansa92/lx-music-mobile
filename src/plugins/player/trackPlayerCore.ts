@@ -20,11 +20,6 @@ const NativeTrackPlayerModule = NativeModules.TrackPlayerModule as {
   getDuration?: () => Promise<number>
 }
 
-export const formatNowPlayingTitleLine = (title?: string, artist?: string) => {
-  const safeTitle = title ?? 'Unknow'
-  return artist ? `${safeTitle} - ${artist}` : safeTitle
-}
-
 const formatIOSNowPlayingMetadata = (metadata: {
   title?: string
   artist?: string
@@ -35,8 +30,8 @@ const formatIOSNowPlayingMetadata = (metadata: {
   lyric?: string
 }) => {
   return {
-    title: formatNowPlayingTitleLine(metadata.title, metadata.artist),
-    artist: metadata.lyric ?? '',
+    title: metadata.title,
+    artist: metadata.artist,
     album: '',
     artwork: metadata.artwork,
     duration: metadata.duration,
