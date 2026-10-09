@@ -7,6 +7,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 1.0.0，留空则使用 package.json 中的版本)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -56,7 +61,11 @@ jobs:
       - name: Read package version
         shell: bash
         run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            PACKAGE_VERSION="${{ github.event.inputs.version }}"
+          else
+            PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          fi
           PACKAGE_VERSION_CODE=$(node -p "require('./package.json').versionCode")
           echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
           echo "PACKAGE_VERSION_CODE=$PACKAGE_VERSION_CODE" >> "$GITHUB_ENV"
