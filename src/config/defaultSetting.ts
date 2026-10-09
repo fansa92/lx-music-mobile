@@ -35,6 +35,7 @@ const defaultSetting: LX.AppSetting = {
   'player.isShowNotificationImage': true,
   'player.isS2t': false,
   'player.isShowBluetoothLyric': false,
+  'player.isShowBluetoothFullLyric': false,
   'player.soundEffect.enabled': false,
   'player.soundEffect.preset': 'none',
   'player.soundEffect.eq.31': 0,

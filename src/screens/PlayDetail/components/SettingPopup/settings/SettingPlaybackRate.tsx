@@ -39,7 +39,7 @@ export default () => {
     value = Math.trunc(value)
     const rate = value / 100
     void setLyricPlaybackRate(rate)
-    void updateMetaData(playerState.musicInfo, playerState.isPlay, playerState.lastLyric, true) // 更新通知栏的播放速率
+    void updateMetaData(playerState.musicInfo, playerState.isPlay, true) // 更新通知栏的播放速率
     if (playbackRate == value) return
     updateSetting({ 'player.playbackRate': rate })
   }
@@ -48,7 +48,7 @@ export default () => {
     markTimeoutExitInteraction()
     setSliderSize(100)
     void setPlaybackRate(1).then(() => {
-      void updateMetaData(playerState.musicInfo, playerState.isPlay, playerState.lastLyric, true) // 更新通知栏的播放速率
+      void updateMetaData(playerState.musicInfo, playerState.isPlay, true) // 更新通知栏的播放速率
       void setLyricPlaybackRate(1)
     })
     updateSetting({ 'player.playbackRate': 1 })

@@ -6,6 +6,61 @@ Project versioning adheres to [Semantic Versioning](http://semver.org/).
 Commit convention is based on [Conventional Commits](http://conventionalcommits.org).
 Change log format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## [1.9.1](https://github.com/lyswhut/lx-music-mobile/compare/v1.9.0...v1.9.1) - 2026-09-19
+
+### 优化
+
+- 优化 tx 推荐歌单列表
+
+### 修复
+
+- 修复打开某些 kg 歌单时歌曲丢失的问题
+
+## [1.9.0](https://github.com/lyswhut/lx-music-mobile/compare/v1.8.4...v1.9.0) - 2026-09-12
+
+### 新增
+
+- 歌曲菜单新增 “清理缓存” 按钮，可用于清理 URL 缓存，当某首歌获取到了错误的歌曲链接时，可以使用该功能清理与其关联的歌曲URL缓存
+
+### 优化
+
+- 优化自动换源歌曲匹配机制
+
+### 修复
+
+- 修复 kg 搜索结果显示问题
+- 修复某些 tx 歌单打开失败的问题 (@ght-000)
+- 修复 mg 图片、歌词获取
+- 修复 tx 歌单翻页问题 (#1107, @jtcai)
+- 修复 tx 歌曲搜索失败的问题（@ikun0014）
+
+## [1.8.4](https://github.com/lyswhut/lx-music-mobile/compare/v1.8.3...v1.8.4) - 2026-05-01
+
+我们很高兴地宣布新项目 Any Listen 的桌面版已发布，目前已支持列表跟随本地文件自动更新、加载并播放WebDAV上的歌曲等功能，更多功能仍在积极开发中，桌面版与Web版将同步更新。
+对于有播放本地音乐或播放服务器上音乐需求的人可以试试，若遇到任何问题可以发 issue 反馈。
+
+### 修复
+
+- 修复蓝牙歌词显示问题（#1042）
+
+## [1.8.3](https://github.com/lyswhut/lx-music-mobile/compare/v1.8.2...v1.8.3) - 2026-05-01
+
+我们很高兴地宣布新项目 Any Listen 的桌面版已发布，目前已支持列表跟随本地文件自动更新、加载并播放WebDAV上的歌曲等功能，更多功能仍在积极开发中，桌面版与Web版将同步更新。
+对于有播放本地音乐或播放服务器上音乐需求的人可以试试，若遇到任何问题可以发 issue 反馈。
+
+### 新增
+
+- 添加了一个 显示完整蓝牙歌词 的选项，启用后会将完整歌词设置到媒体信息中，在某些场景中可用于显示完整歌词
+
+### 优化
+
+- 优化歌单内歌曲搜索结果排序
+
+### 修复
+
+- 修复可忽略的错误没有正确处理的问题
+- 修复 tx 搜索结果显示异常的问题
+
 ## [1.8.2](https://github.com/lyswhut/lx-music-mobile/compare/v1.8.1...v1.8.2) - 2026-03-28
 
 ### 修复

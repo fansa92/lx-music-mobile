@@ -1,17 +1,24 @@
 import { httpFetch } from '../../request'
 import getMusicInfo from './musicInfo'
-import { b64DecodeUnicode, decodeName } from '../../index'
-import { decryptQrc } from './qrc/decode'
+import { decodeQrc } from './qrcDecode'
 
 const songIdMap = new Map()
 const promises = new Map()
+export const decodeLyric = async(lrc, tlrc, rlrc) => ({
+  lyric: await decodeQrc(lrc),
+  tlyric: await decodeQrc(tlrc),
+  rlyric: await decodeQrc(rlrc),
+})
+
 
 const parseTools = {
   rxps: {
+    info: /^{"/,
     lineTime: /^\[(\d+),\d+\]/,
     lineTime2: /^\[([\d:.]+)\]/,
     wordTime: /\(\d+,\d+\)/,
     wordTimeAll: /(\(\d+,\d+\))/g,
+    timeLabelFixRxp: /(?:\.0+|0+)$/,
   },
   msFormat(timeMs) {
     if (Number.isNaN(timeMs)) return ''
@@ -23,20 +30,24 @@ const parseTools = {
     return `[${m}:${s}.${String(ms).padStart(3, '0')}]`
   },
   parseLyric(lrc) {
-    lrc = lrc.trim().replace(/\r/g, '')
+    lrc = lrc.trim()
+    lrc = lrc.replace(/\r/g, '')
     if (!lrc) return { lyric: '', lxlyric: '' }
     const lines = lrc.split('\n')
+
     const lxlrcLines = []
     const lrcLines = []
 
     for (let line of lines) {
       line = line.trim()
-      const result = this.rxps.lineTime.exec(line)
+      let result = this.rxps.lineTime.exec(line)
       if (!result) {
         if (line.startsWith('[offset')) {
           lxlrcLines.push(line)
           lrcLines.push(line)
-        } else if (this.rxps.lineTime2.test(line)) {
+        }
+        if (this.rxps.lineTime2.test(line)) {
+          // lxlrcLines.push(line)
           lrcLines.push(line)
         }
         continue
@@ -46,7 +57,8 @@ const parseTools = {
       const startTimeStr = this.msFormat(startMsTime)
       if (!startTimeStr) continue
 
-      const words = line.replace(this.rxps.lineTime, '')
+      let words = line.replace(this.rxps.lineTime, '')
+
       lrcLines.push(`${startTimeStr}${words.replace(this.rxps.wordTimeAll, '')}`)
 
       let times = words.match(this.rxps.wordTimeAll)
@@ -59,29 +71,32 @@ const parseTools = {
       const newWords = times.map((time, index) => `${time}${wordArr[index]}`).join('')
       lxlrcLines.push(`${startTimeStr}${newWords}`)
     }
-
     return {
       lyric: lrcLines.join('\n'),
       lxlyric: lxlrcLines.join('\n'),
     }
   },
   parseRlyric(lrc) {
-    lrc = lrc.trim().replace(/\r/g, '')
-    if (!lrc) return ''
+    lrc = lrc.trim()
+    lrc = lrc.replace(/\r/g, '')
+    if (!lrc) return { lyric: '', lxlyric: '' }
     const lines = lrc.split('\n')
+
     const lrcLines = []
 
     for (let line of lines) {
       line = line.trim()
-      const result = this.rxps.lineTime.exec(line)
+      let result = this.rxps.lineTime.exec(line)
       if (!result) continue
 
       const startMsTime = parseInt(result[1])
       const startTimeStr = this.msFormat(startMsTime)
       if (!startTimeStr) continue
-      lrcLines.push(`${startTimeStr}${line.replace(this.rxps.lineTime, '').replace(this.rxps.wordTimeAll, '')}`)
-    }
 
+      let words = line.replace(this.rxps.lineTime, '')
+
+      lrcLines.push(`${startTimeStr}${words.replace(this.rxps.wordTimeAll, '')}`)
+    }
     return lrcLines.join('\n')
   },
   removeTag(str) {
@@ -96,9 +111,12 @@ const parseTools = {
     return parseInt(m) * 3600000 + parseInt(s) * 1000 + parseInt(ms)
   },
   fixRlrcTimeTag(rlrc, lrc) {
+    // console.log(lrc)
+    // console.log(rlrc)
     const rlrcLines = rlrc.split('\n')
     let lrcLines = lrc.split('\n')
-    const newLrc = []
+    // let temp = []
+    let newLrc = []
     rlrcLines.forEach((line) => {
       const result = this.rxps.lineTime2.exec(line)
       if (!result) return
@@ -115,21 +133,29 @@ const parseTools = {
           newLrc.push(line.replace(this.rxps.lineTime2, lrcLineResult[0]))
           break
         }
+        // temp.push(line)
       }
+      // lrcLines = [...temp, ...lrcLines]
+      // temp = []
     })
     return newLrc.join('\n')
   },
   fixTlrcTimeTag(tlrc, lrc) {
+    // console.log(lrc)
+    // console.log(tlrc)
     const tlrcLines = tlrc.split('\n')
     let lrcLines = lrc.split('\n')
-    const newLrc = []
+    // let temp = []
+    let newLrc = []
     tlrcLines.forEach((line) => {
       const result = this.rxps.lineTime2.exec(line)
       if (!result) return
       const words = line.replace(this.rxps.lineTime2, '')
       if (!words.trim()) return
       let time = result[1]
-      if (time.includes('.')) time += ''.padStart(3 - time.split('.')[1].length, '0')
+      if (time.includes('.')) {
+        time += ''.padStart(3 - time.split('.')[1].length, '0')
+      }
       const t1 = this.getIntv(time)
 
       while (lrcLines.length) {
@@ -141,7 +167,10 @@ const parseTools = {
           newLrc.push(line.replace(this.rxps.lineTime2, lrcLineResult[0]))
           break
         }
+        // temp.push(line)
       }
+      // lrcLines = [...temp, ...lrcLines]
+      // temp = []
     })
     return newLrc.join('\n')
   },
@@ -153,41 +182,23 @@ const parseTools = {
       lxlyric: '',
     }
     if (lrc) {
-      const { lyric, lxlyric } = this.parseLyric(this.removeTag(lrc))
+      let { lyric, lxlyric } = this.parseLyric(this.removeTag(lrc))
       info.lyric = lyric
       info.lxlyric = lxlyric
+      // console.log(lyric)
+      // console.log(lxlyric)
     }
     if (rlrc) info.rlyric = this.fixRlrcTimeTag(this.parseRlyric(this.removeTag(rlrc)), info.lyric)
     if (tlrc) info.tlyric = this.fixTlrcTimeTag(tlrc, info.lyric)
+    // console.log(info.lxlyric)
+    // console.log(info.lyric)
+    // console.log(info.tlyric)
+    // console.log(info.rlyric)
+
     return info
   },
 }
 
-const decodeLyric = async(lrc, tlrc, rlrc) => {
-  return {
-    lyric: lrc ? decryptQrc(lrc) : '',
-    tlyric: tlrc ? decryptQrc(tlrc) : '',
-    rlyric: rlrc ? decryptQrc(rlrc) : '',
-  }
-}
-
-const getLegacyLyric = songmid => {
-  const requestObj = httpFetch(`https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${songmid}&g_tk=5381&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&platform=yqq`, {
-    headers: {
-      Referer: 'https://y.qq.com/portal/player.html',
-    },
-  })
-  requestObj.promise = requestObj.promise.then(({ body }) => {
-    if (body.code != 0 || !body.lyric) return Promise.reject(new Error('Get lyric failed'))
-    return {
-      lyric: decodeName(b64DecodeUnicode(body.lyric)),
-      tlyric: decodeName(b64DecodeUnicode(body.trans)),
-      rlyric: '',
-      lxlyric: '',
-    }
-  })
-  return requestObj
-}
 
 export default {
   successCode: 0,
@@ -204,13 +215,21 @@ export default {
   },
   async parseLyric(lrc, tlrc, rlrc) {
     const { lyric, tlyric, rlyric } = await decodeLyric(lrc, tlrc, rlrc)
-    return parseTools.parse(decodeName(lyric), decodeName(tlyric), decodeName(rlyric))
+    // return {
+
+    // }
+    // console.log('lyric', lyric)
+    // console.log('tlyric', tlyric)
+    // console.log('rlyric', rlyric)
+    return parseTools.parse(lyric, tlyric, rlyric)
   },
   getLyric(mInfo, retryNum = 0) {
     if (retryNum > 3) return Promise.reject(new Error('Get lyric failed'))
 
     return {
-      cancelHttp() {},
+      cancelHttp() {
+
+      },
       promise: this.getSongId(mInfo).then(songId => {
         const requestObj = httpFetch('https://u.y.qq.com/cgi-bin/musicu.fcg', {
           method: 'post',
@@ -247,13 +266,33 @@ export default {
           },
         })
         return requestObj.promise.then(({ body }) => {
-          if (body.code != this.successCode || body.req.code != this.successCode) {
-            return this.getLyric(mInfo, ++retryNum).promise
-          }
+          // console.log(body)
+          if (body.code != this.successCode || body.req.code != this.successCode) return this.getLyric(songId, ++retryNum)
           const data = body.req.data
-          return this.parseLyric(data.lyric, data.trans, data.roma).catch(() => getLegacyLyric(mInfo.songmid).promise)
+          return this.parseLyric(data.lyric, data.trans, data.roma)
         })
       }),
     }
   },
 }
+
+// export default {
+//   regexps: {
+//     matchLrc: /.+"lyric":"([\w=+/]*)".+/,
+//   },
+//   getLyric(songmid) {
+//     const requestObj = httpFetch(`https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=${songmid}&g_tk=5381&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&platform=yqq`, {
+//       headers: {
+//         Referer: 'https://y.qq.com/portal/player.html',
+//       },
+//     })
+//     requestObj.promise = requestObj.promise.then(({ body }) => {
+//       if (body.code != 0 || !body.lyric) return Promise.reject(new Error('Get lyric failed'))
+//       return {
+//         lyric: decodeName(b64DecodeUnicode(body.lyric)),
+//         tlyric: decodeName(b64DecodeUnicode(body.trans)),
+//       }
+//     })
+//     return requestObj
+//   },
+// }
