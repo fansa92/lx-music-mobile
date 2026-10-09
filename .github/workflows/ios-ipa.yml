@@ -45,7 +45,7 @@ jobs:
           bundler-cache: true
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Install CocoaPods dependencies
         shell: bash
@@ -78,6 +78,7 @@ jobs:
             CURRENT_PROJECT_VERSION="$PACKAGE_VERSION_CODE" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            NODE_BINARY="$(which node)" \
             clean build 2>&1 | tee build/xcodebuild.log
 
       - name: Show first Xcode errors
