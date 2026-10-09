@@ -1,6 +1,7 @@
 // import { LIST_ID_LOVE } from '@/config/constant'
 
 import { syncNowPlayingMetadata, syncNowPlayingState } from '@/core/player/nowPlaying'
+import { state as trackPlayerState } from '@/plugins/player/playList'
 import playerState from '@/store/player/state'
 
 export default () => {
@@ -17,6 +18,7 @@ export default () => {
     lockLrc: false,
   }
   let syncedDurationMusicId: string | null = null
+  let syncedDurationValue: number = 0
   const setButtons = () => {
     // setPlayerAction(buttons)
     if (!playerState.playMusicInfo.musicInfo) return
@@ -69,13 +71,16 @@ export default () => {
   const handleSetPlayInfo = () => {
     if (!playerState.playMusicInfo.musicInfo) return
     syncedDurationMusicId = null
+    syncedDurationValue = 0
+    trackPlayerState.prevDuration = -1
     syncNowPlayingMetadata(true)
   }
   const handlePlayProgressChanged: typeof global.state_event.playProgressChanged = (progress) => {
     const musicId = playerState.playMusicInfo.musicInfo?.id
     if (!musicId || progress.maxPlayTime <= 0) return
-    if (syncedDurationMusicId == musicId) return
+    if (syncedDurationMusicId == musicId && syncedDurationValue > 0) return
     syncedDurationMusicId = musicId
+    syncedDurationValue = progress.maxPlayTime
     syncNowPlayingMetadata(true)
   }
   const handleConfigUpdated: typeof global.state_event.configUpdated = (keys) => {

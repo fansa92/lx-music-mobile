@@ -32,14 +32,14 @@ export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: bool
   state.isPlaying = isPlay
   if (force) {
     const duration = resolveMetadataDuration(await getTrackDuration())
-    state.prevDuration = duration
+    if (duration > 0) state.prevDuration = duration
     delayUpdateMusicInfo(musicInfo, lyric, isPlay)
     return
   }
   if (!force && isPlay == prevIsPlaying) {
     const duration = resolveMetadataDuration(await getTrackDuration())
     if (state.prevDuration != duration) {
-      state.prevDuration = duration
+      if (duration > 0) state.prevDuration = duration
       const trackInfo = await getCurrentTrack()
       if (trackInfo && musicInfo) {
         delayUpdateMusicInfo(musicInfo, lyric, isPlay)
@@ -47,7 +47,8 @@ export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: bool
     }
   } else {
     const [duration, trackInfo] = await Promise.all([getTrackDuration(), getCurrentTrack()])
-    state.prevDuration = resolveMetadataDuration(duration)
+    const resolved = resolveMetadataDuration(duration)
+    if (resolved > 0) state.prevDuration = resolved
     if (trackInfo && musicInfo) {
       delayUpdateMusicInfo(musicInfo, lyric, isPlay)
     }
@@ -117,16 +118,19 @@ const updateMetaInfo = async(mInfo: LX.Player.MusicInfo, lyric?: string, isPlayi
     singer = `${mInfo.name}${mInfo.singer ? ` - ${mInfo.singer}` : ''}`
     album = mInfo.album ?? undefined
   }
+  const duration = resolveMetadataDuration(await getTrackDuration())
+  if (duration > 0) state.prevDuration = duration
   const metadata = {
     title: name,
     artist: singer,
     album,
     artwork,
-    duration: state.prevDuration || 0,
+    duration: state.prevDuration > 0 ? state.prevDuration : undefined,
     elapsedTime: isNativeFlacActive()
       ? await getNativeFlacPosition().catch(() => 0)
       : await getAccuratePosition().catch(() => 0),
   }
+  if (metadata.duration == null) return
   await updateCurrentTrackMetadata(metadata)
 }
 

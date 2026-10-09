@@ -748,7 +748,7 @@ static void LXSetNowPlayingInfo(NSDictionary *metadata) {
   if (title != nil) info[MPMediaItemPropertyTitle] = title;
   if (artist != nil) info[MPMediaItemPropertyArtist] = artist;
   if (album != nil) info[MPMediaItemPropertyAlbumTitle] = album;
-  if (duration != nil) info[MPMediaItemPropertyPlaybackDuration] = duration;
+  if (duration != nil && duration.doubleValue > 0) info[MPMediaItemPropertyPlaybackDuration] = duration;
   if (elapsedTime != nil) info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedTime;
   info[MPNowPlayingInfoPropertyPlaybackRate] = playbackRate ?: info[MPNowPlayingInfoPropertyPlaybackRate] ?: LXDefaultNowPlayingRate();
   info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = info[MPNowPlayingInfoPropertyDefaultPlaybackRate] ?: LXNowPlayingDefaultPlaybackRateValue();
