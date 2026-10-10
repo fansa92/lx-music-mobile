@@ -3,6 +3,7 @@ import { View, TouchableOpacity } from 'react-native'
 import { LIST_ITEM_HEIGHT } from '@/config/constant'
 // import { BorderWidths } from '@/theme'
 import { Icon } from '@/components/common/Icon'
+import Image from '@/components/common/Image'
 import { createStyle, type RowInfo } from '@/utils/tools'
 import { useTheme } from '@/store/theme/hook'
 import { useAssertApiSupport } from '@/store/common/hook'
@@ -11,6 +12,7 @@ import Text from '@/components/common/Text'
 import Badge from '@/components/common/Badge'
 
 export const ITEM_HEIGHT = scaleSizeH(LIST_ITEM_HEIGHT)
+const PIC_SIZE = scaleSizeH(40)
 
 
 export default memo(({ item, index, activeIndex, onPress, onShowMenu, onLongPress, selectedList, rowInfo, isShowAlbumName, isShowInterval }: {
@@ -51,6 +53,7 @@ export default memo(({ item, index, activeIndex, onPress, onShowMenu, onLongPres
             ? <Icon style={styles.sn} name="play-outline" size={13} color={theme['c-primary-font']} />
             : <Text style={styles.sn} size={13} color={theme['c-300']}>{index + 1}</Text>
         }
+        <Image url={item.meta.picUrl} style={styles.pic} />
         <View style={styles.itemInfo}>
           {/* <View style={styles.listItemTitle}> */}
           <Text color={active ? theme['c-primary-font'] : theme['c-font']} numberOfLines={1}>{item.name}</Text>
@@ -111,6 +114,12 @@ const styles = createStyle({
     // backgroundColor: 'rgba(0,0,0,0.2)',
     paddingLeft: 3,
     paddingRight: 3,
+  },
+  pic: {
+    width: PIC_SIZE,
+    height: PIC_SIZE,
+    borderRadius: 2,
+    marginRight: 6,
   },
   itemInfo: {
     flexGrow: 1,
