@@ -89,7 +89,7 @@ export default {
         interval: Number.isNaN(interval) ? 0 : formatPlayTime(interval),
         albumName: info.ALBUM ? decodeName(info.ALBUM) : '',
         lrc: null,
-        img: null,
+        img: info.web_albumpic_short ? `http://img1.kwcdn.kuwo.cn/star/albumcover/${info.web_albumpic_short}` : null,
         otherSource: null,
         types,
         _types,
