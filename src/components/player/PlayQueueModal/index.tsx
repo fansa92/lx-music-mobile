@@ -1,17 +1,20 @@
-import { memo, useCallback, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react'
-import { FlatList, View, TouchableOpacity } from 'react-native'
-import Dialog, { type DialogType } from '@/components/common/Dialog'
+import { memo, useCallback, useMemo, useRef, useState, forwardRef, useImperativeHandle, useEffect } from 'react'
+import { Animated, FlatList, Modal, Platform, Pressable, View, TouchableOpacity, type ModalProps } from 'react-native'
 import { createStyle } from '@/utils/tools'
 import { useTheme } from '@/store/theme/hook'
-import { scaleSizeH } from '@/utils/pixelRatio'
+import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
 import Text from '@/components/common/Text'
 import { Icon } from '@/components/common/Icon'
 import Badge from '@/components/common/Badge'
 import { usePlayInfo } from '@/store/player/hook'
 import { playList } from '@/core/player/player'
 import { getList } from '@/core/player/playInfo'
+import { useStatusbarHeight } from '@/store/common/hook'
+import useWindowSize from '@/utils/hooks/useWindowSize'
 
 const ITEM_HEIGHT = scaleSizeH(48)
+const DRAWER_WIDTH_PERCENTAGE = 0.75
+const DRAWER_MAX_WIDTH = scaleSizeW(360)
 
 const ListItem = memo(({ item, index, activeIndex, onPress }: {
   item: LX.Music.MusicInfo
@@ -55,46 +58,54 @@ const ListItem = memo(({ item, index, activeIndex, onPress }: {
     prevProps.activeIndex === nextProps.activeIndex
 })
 
-const Title = ({ title }: { title: string }) => {
-  const theme = useTheme()
-  return (
-    <View style={styles.titleContainer}>
-      <Text style={styles.title} size={14} color={theme['c-primary-font']}>{title}</Text>
-    </View>
-  )
-}
-
 export interface PlayQueueModalType {
   show: () => void
 }
 
 export default forwardRef<PlayQueueModalType, {}>((props, ref) => {
-  const dialogRef = useRef<DialogType>(null)
   const [visible, setVisible] = useState(false)
   const playInfo = usePlayInfo()
+  const theme = useTheme()
+  const statusBarHeight = useStatusbarHeight()
+  const windowSize = useWindowSize()
+  const animation = useRef(new Animated.Value(0)).current
 
   const listId = playInfo.playerListId
   const activeIndex = playInfo.playerPlayIndex
+
+  const drawerWidth = useMemo(() => {
+    return Math.min(Math.floor(windowSize.width * DRAWER_WIDTH_PERCENTAGE), DRAWER_MAX_WIDTH)
+  }, [windowSize.width])
 
   const list = useMemo(() => {
     if (!listId) return []
     return getList(listId) as LX.Music.MusicInfo[]
   }, [listId, visible])
 
+  const openDrawer = useCallback(() => {
+    setVisible(true)
+    Animated.timing(animation, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start()
+  }, [animation])
+
+  const closeDrawer = useCallback(() => {
+    Animated.timing(animation, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setVisible(false)
+    })
+  }, [animation])
+
   useImperativeHandle(ref, () => ({
     show() {
-      setVisible(true)
-      requestAnimationFrame(() => {
-        dialogRef.current?.setVisible(true)
-      })
+      openDrawer()
     },
-  }))
-
-  const handleHide = () => {
-    requestAnimationFrame(() => {
-      setVisible(false)
-    })
-  }
+  }), [openDrawer])
 
   const handlePress = useCallback((index: number) => {
     if (!listId || index === activeIndex) return
@@ -111,41 +122,83 @@ export default forwardRef<PlayQueueModalType, {}>((props, ref) => {
 
   const keyExtractor = useCallback((item: LX.Music.MusicInfo) => item.id, [])
 
+  const drawerTranslate = animation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [drawerWidth, 0],
+  })
+  const overlayOpacity = animation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.32],
+  })
+
+  const supportedOrientations = useMemo<ModalProps['supportedOrientations']>(() => Platform.OS === 'ios'
+    ? ['portrait', 'portrait-upside-down', 'landscape', 'landscape-left', 'landscape-right']
+    : undefined, [])
+
+  if (!visible) return null
+
   return (
-    <Dialog ref={dialogRef} onHide={handleHide} title="">
-      {
-        visible
-          ? (<>
-              <Title title={`播放队列 (${list.length})`} />
-              <FlatList
-                style={styles.list}
-                data={list}
-                renderItem={renderItem}
-                keyExtractor={keyExtractor}
-                getItemLayout={getItemLayout}
-                initialScrollIndex={Math.max(0, activeIndex - 2)}
-                maxToRenderPerBatch={10}
-                windowSize={5}
-                removeClippedSubviews={true}
-              />
-            </>)
-          : null
-      }
-    </Dialog>
+    <Modal
+      animationType="fade"
+      transparent={true}
+      hardwareAccelerated={true}
+      statusBarTranslucent={true}
+      visible={visible}
+      onRequestClose={closeDrawer}
+      supportedOrientations={supportedOrientations}
+    >
+      <View style={{ flex: 1, paddingTop: statusBarHeight }}>
+        <Animated.View
+          pointerEvents="auto"
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: overlayOpacity }}
+        >
+          <Pressable onPress={closeDrawer} style={{ flex: 1, backgroundColor: '#000' }} />
+        </Animated.View>
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: drawerWidth,
+            backgroundColor: theme['c-content-background'],
+            transform: [{ translateX: drawerTranslate }],
+          }}
+        >
+          <View style={styles.header}>
+            <Text style={styles.title} size={14} color={theme['c-primary-font']}>
+              播放队列 ({list.length})
+            </Text>
+          </View>
+          <FlatList
+            style={styles.list}
+            data={list}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            getItemLayout={getItemLayout}
+            initialScrollIndex={Math.max(0, activeIndex - 2)}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            removeClippedSubviews={true}
+          />
+        </Animated.View>
+      </View>
+    </Modal>
   )
 })
 
 const styles = createStyle({
-  titleContainer: {
+  header: {
     paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   title: {
     fontWeight: 'bold',
   },
   list: {
-    flexGrow: 0,
-    maxHeight: scaleSizeH(400),
+    flex: 1,
   },
   listItem: {
     flexDirection: 'row',
