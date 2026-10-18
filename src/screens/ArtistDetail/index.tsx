@@ -12,6 +12,7 @@ import PlayerBar from '@/components/player/PlayerBar'
 import { COMPONENT_IDS, LIST_IDS } from '@/config/constant'
 import { setTempList } from '@/core/list'
 import { playList } from '@/core/player/player'
+import { toNewMusicInfo } from '@/utils'
 
 const SONG_LIMIT = 100
 const ALBUM_LIMIT = 100
@@ -66,10 +67,11 @@ export default memo(({ componentId, artistInfo }: { componentId: string, artistI
     loadingSongRef.current = true
     setSongs(p => ({ ...p, loading: true }))
     const offset = (page - 1) * SONG_LIMIT
-    api.getSongs(artistInfo.id, sort, SONG_LIMIT, offset).then((data: { list: LX.Music.MusicInfoOnline[], hasMore: boolean }) => {
+    api.getSongs(artistInfo.id, sort, SONG_LIMIT, offset).then((data: { list: any[], hasMore: boolean }) => {
+      const convertedList = data.list.map(m => toNewMusicInfo(m)) as LX.Music.MusicInfoOnline[]
       setSongs(p => ({
         ...p,
-        list: page === 1 ? data.list : [...p.list, ...data.list],
+        list: page === 1 ? convertedList : [...p.list, ...convertedList],
         hasMore: data.hasMore,
         page: page + 1,
         loading: false,

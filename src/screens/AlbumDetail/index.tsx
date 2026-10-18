@@ -14,6 +14,7 @@ import PlayerBar from '@/components/player/PlayerBar'
 import { COMPONENT_IDS, LIST_IDS } from '@/config/constant'
 import { setTempList } from '@/core/list'
 import { playList } from '@/core/player/player'
+import { toNewMusicInfo } from '@/utils'
 
 export interface AlbumInfo {
   id: string
@@ -42,9 +43,10 @@ export default memo(({ componentId, albumInfo }: { componentId: string, albumInf
 
   const loadAlbum = useCallback((isRefresh = false) => {
     listRef.current?.setStatus(isRefresh ? 'refreshing' : 'loading')
-    api.getAlbum(albumInfo.id).then((data: { info: any, list: LX.Music.MusicInfoOnline[] }) => {
-      setAlbumDetail(data)
-      listRef.current?.setList(data.list, false, false)
+    api.getAlbum(albumInfo.id).then((data: { info: any, list: any[] }) => {
+      const convertedList = data.list.map(m => toNewMusicInfo(m)) as LX.Music.MusicInfoOnline[]
+      setAlbumDetail({ info: data.info, list: convertedList })
+      listRef.current?.setList(convertedList, false, false)
       listRef.current?.setStatus('end')
     }).catch(() => {
       toast(isRefresh ? '刷新专辑信息失败' : '获取专辑信息失败')
