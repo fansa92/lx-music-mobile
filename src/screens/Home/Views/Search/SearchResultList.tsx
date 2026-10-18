@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle, useRef, useState, useCallback, memo } 
 import { FlatList, RefreshControl, TouchableOpacity, View } from 'react-native'
 import musicSdk from '@/utils/musicSdk'
 import { useTheme } from '@/store/theme/hook'
-import { createStyle, toast } from '@/utils/tools'
+import { createStyle } from '@/utils/tools'
 import Text from '@/components/common/Text'
 import Image from '@/components/common/Image'
 import { BorderRadius } from '@/theme'
@@ -56,14 +56,10 @@ const imgSize = scaleSizeW(60)
 const ARTIST_ALBUM_SOURCES: LX.OnlineSource[] = ['kw', 'wy', 'tx', 'kg', 'mg']
 
 const handleItemPress = (searchType: SearchType, item: ListItem) => {
-  if (item.source !== 'wy') {
-    toast('当前仅支持查看网易云音乐的歌手和专辑详情')
-    return
-  }
   const componentId = commonState.componentIds.home
   if (!componentId) return
   if (searchType === 'artist') {
-    navigations.pushArtistDetailScreen(componentId, { id: String(item.id), name: item.name })
+    navigations.pushArtistDetailScreen(componentId, { id: String(item.id), name: item.name, source: item.source })
   } else {
     const albumItem = item as AlbumItem
     navigations.pushAlbumDetailScreen(componentId, {
@@ -73,6 +69,7 @@ const handleItemPress = (searchType: SearchType, item: ListItem) => {
       img: albumItem.picUrl,
       size: albumItem.size,
       publishTime: albumItem.publishTime ? new Date(albumItem.publishTime).getTime() : undefined,
+      source: albumItem.source,
     })
   }
 }

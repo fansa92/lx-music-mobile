@@ -5,6 +5,7 @@ import PageContent from '@/components/PageContent'
 import Header from './Header'
 import SongList from './SongList'
 import wyApi from '@/utils/musicSdk/wy/artist'
+import kgApi from '@/utils/musicSdk/kg/artist'
 import { createStyle, toast } from '@/utils/tools'
 import { setComponentId } from '@/core/common'
 import PlayerBar from '@/components/player/PlayerBar'
@@ -18,6 +19,14 @@ const ALBUM_LIMIT = 100
 export interface ArtistInfo {
   id: string
   name: string
+  source?: string
+}
+
+const getApi = (source?: string) => {
+  switch (source) {
+    case 'kg': return kgApi
+    default: return wyApi
+  }
 }
 
 interface SongsState {
@@ -42,10 +51,11 @@ export default memo(({ componentId, artistInfo }: { componentId: string, artistI
   const [activeTab, setActiveTab] = useState<'songs' | 'albums'>('songs')
   const loadingSongRef = useRef(false)
   const loadingAlbumRef = useRef(false)
+  const api = getApi(artistInfo.source)
 
   useEffect(() => {
     setComponentId(COMPONENT_IDS.artistDetail, componentId)
-    wyApi.getDetail(artistInfo.id).then((data: any) => {
+    api.getDetail(artistInfo.id).then((data: any) => {
       setArtistDetail(data)
     }).catch(() => { toast('获取歌手信息失败') })
   }, [componentId, artistInfo.id])
@@ -56,7 +66,7 @@ export default memo(({ componentId, artistInfo }: { componentId: string, artistI
     loadingSongRef.current = true
     setSongs(p => ({ ...p, loading: true }))
     const offset = (page - 1) * SONG_LIMIT
-    wyApi.getSongs(artistInfo.id, sort, SONG_LIMIT, offset).then((data: { list: LX.Music.MusicInfoOnline[], hasMore: boolean }) => {
+    api.getSongs(artistInfo.id, sort, SONG_LIMIT, offset).then((data: { list: LX.Music.MusicInfoOnline[], hasMore: boolean }) => {
       setSongs(p => ({
         ...p,
         list: page === 1 ? data.list : [...p.list, ...data.list],
@@ -79,7 +89,7 @@ export default memo(({ componentId, artistInfo }: { componentId: string, artistI
     loadingAlbumRef.current = true
     setAlbums(p => ({ ...p, loading: true }))
     const offset = (page - 1) * ALBUM_LIMIT
-    wyApi.getAlbums(artistInfo.id, ALBUM_LIMIT, offset).then((data: { hotAlbums: any[], hasMore: boolean }) => {
+    api.getAlbums(artistInfo.id, ALBUM_LIMIT, offset).then((data: { hotAlbums: any[], hasMore: boolean }) => {
       setAlbums(p => ({
         ...p,
         list: page === 1 ? data.hotAlbums : [...p.list, ...data.hotAlbums],
@@ -117,7 +127,7 @@ export default memo(({ componentId, artistInfo }: { componentId: string, artistI
   }, [activeTab])
 
   const handleRefresh = useCallback(() => {
-    wyApi.getDetail(artistInfo.id).then((data: any) => {
+    api.getDetail(artistInfo.id).then((data: any) => {
       setArtistDetail(data)
     }).catch(() => { toast('刷新歌手信息失败') })
     if (activeTab === 'songs') {

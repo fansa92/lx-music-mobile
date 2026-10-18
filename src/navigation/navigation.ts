@@ -308,6 +308,7 @@ export function pushSonglistDetailScreen(componentId: string, info: ListInfoItem
 export interface ArtistInfoPassProps {
   id: string
   name: string
+  source?: string
 }
 export interface AlbumInfoPassProps {
   id: string
@@ -317,6 +318,7 @@ export interface AlbumInfoPassProps {
   artists?: Array<{ id: string, name: string }>
   size?: number
   publishTime?: number
+  source?: string
 }
 
 const pushDetailOptions = (): Options => {

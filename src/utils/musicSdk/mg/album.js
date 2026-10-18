@@ -3,49 +3,44 @@ import { filterMusicInfoList } from './musicInfo'
 import { formatPlayCount } from '../../index'
 
 export default {
-  /**
-   * 通过AlbumId获取专辑
-   * @param {*} id
-   * @param {*} page
-   */
-  async getAlbumDetail(id, page = 1) {
-    const list = await createHttpFetch(`http://app.c.nf.migu.cn/MIGUM2.0/v1.0/content/queryAlbumSong?albumId=${id}&pageNo=${page}`)
-    if (!list.songList) return Promise.reject(new Error('Get album list error.'))
-
-    const songList = filterMusicInfoList(list.songList)
-    const listInfo = await this.getAlbumInfo(id)
-
-    return {
-      list: songList || [],
-      page,
-      limit: listInfo.total,
-      total: listInfo.total,
-      source: 'mg',
-      info: {
-        name: listInfo.name,
-        img: listInfo.image,
-        desc: listInfo.desc,
-        author: listInfo.author,
-        play_count: listInfo.play_count,
-      },
-    }
-  },
-  /**
-   * 通过AlbumId获取专辑信息
-   * @param {*} id
-   * @param {*} page
-   */
   async getAlbumInfo(id) {
-    const info = await createHttpFetch(`https://app.c.nf.migu.cn/MIGUM3.0/resource/album/v2.0?albumId=${id}`)
+    const info = await createHttpFetch(
+      `https://app.c.nf.migu.cn/MIGUM3.0/resource/album/v2.0?albumId=${id}`
+    )
     if (!info) return Promise.reject(new Error('Get album info error.'))
 
     return {
       name: info.title,
-      image: info.imgItems.length ? info.imgItems[0].img : null,
+      img: info.imgItems.length ? info.imgItems[0].img : null,
       desc: info.summary,
       author: info.singer,
       play_count: formatPlayCount(info.opNumItem.playNum),
       total: info.totalCount,
+    }
+  },
+
+  async getAlbum(id, page = 1, retryNum = 0) {
+    if (retryNum > 2) return Promise.reject(new Error('获取专辑详情失败'))
+    try {
+      const list = await createHttpFetch(
+        `http://app.c.nf.migu.cn/MIGUM2.0/v1.0/content/queryAlbumSong?albumId=${id}&pageNo=${page}`
+      )
+      if (!list.songList) return Promise.reject(new Error('Get album list error.'))
+
+      const songList = filterMusicInfoList(list.songList)
+      const listInfo = await this.getAlbumInfo(id)
+
+      return {
+        list: songList || [],
+        info: {
+          name: listInfo.name,
+          img: listInfo.img,
+          desc: listInfo.desc,
+          author: listInfo.author,
+        },
+      }
+    } catch (err) {
+      return this.getAlbum(id, page, retryNum + 1)
     }
   },
 }
