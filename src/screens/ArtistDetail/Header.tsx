@@ -20,8 +20,8 @@ export default memo(({ artist, componentId }: Props) => {
 
   const artistName = artist?.name || ''
   const artistAlias = artist?.alias?.length ? artist.alias[0] : ''
-  const description = artist?.briefDesc || ''
-  const artistPic = artist?.picUrl || artist?.img1v1Url
+  const description = artist?.briefDesc || artist?.desc || ''
+  const artistPic = artist?.picUrl || artist?.img1v1Url || artist?.img
 
   const back = () => {
     void pop(componentId)
