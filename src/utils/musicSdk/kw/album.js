@@ -58,22 +58,29 @@ export default {
   getAlbumListDetail(id, page, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('try max num'))
     const requestObj_listDetail = httpFetch(
-      `http://search.kuwo.cn/r.s?pn=${page - 1}&rn=${this.limit_song}&stype=albuminfo&albumid=${id}&show_copyright_off=0&encoding=utf&vipver=MUSIC_9.1.0`
+      `http://search.kuwo.cn/r.s?pn=${page - 1}&rn=${this.limit_song}&stype=albuminfo&albumid=${id}&show_copyright_off=0&encoding=utf&vipver=MUSIC_9.1.0`,
     )
     return requestObj_listDetail.promise.then(({ statusCode, body }) => {
       if (statusCode !== 200) return this.getAlbumListDetail(id, page, ++retryNum)
       body = objStr2JSON(body)
       if (!body.musiclist) return this.getAlbumListDetail(id, page, ++retryNum)
       body.name = decodeName(body.name)
+      const albumImg = body.img || body.hts_img || ''
+      const list = this.filterListDetail(body.musiclist, body.name, body.albumid)
+      if (albumImg) {
+        list.forEach(song => {
+          if (!song.img) song.img = albumImg
+        })
+      }
       return {
-        list: this.filterListDetail(body.musiclist, body.name, body.albumid),
+        list,
         page,
         limit: this.limit_song,
         total: parseInt(body.songnum),
         source: 'kw',
         info: {
           name: body.name,
-          img: body.img || body.hts_img,
+          img: albumImg,
           desc: decodeName(body.info),
           author: decodeName(body.artist),
         },

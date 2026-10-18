@@ -19,14 +19,17 @@ export default {
           mid: '22945702112173152889429073101964063697',
           show_album_tag: 0,
         },
-      }
+      },
     )
-    if (!albumInfoRequest) return Promise.reject(new Error('get album info failed.'))
+    if (!albumInfoRequest || !albumInfoRequest[0]) return Promise.reject(new Error('get album info failed.'))
     const albumInfo = albumInfoRequest[0]
+    const img = albumInfo.sizable_cover
+      ? albumInfo.sizable_cover.replace('{size}', '240')
+      : (albumInfo.cover || '')
 
     return {
       name: albumInfo.album_name,
-      img: albumInfo.sizable_cover.replace('{size}', 240),
+      img,
       desc: albumInfo.intro,
       author: albumInfo.author_name,
     }
@@ -36,12 +39,18 @@ export default {
     if (retryNum > 2) return Promise.reject(new Error('获取专辑详情失败'))
     try {
       const albumList = await createHttpFetch(
-        `http://mobiles.kugou.com/api/v3/album/song?version=9108&albumid=${id}&plat=0&pagesize=200&area_code=0&page=1&with_res_tag=0`
+        `http://mobiles.kugou.com/api/v3/album/song?version=9108&albumid=${id}&plat=0&pagesize=200&area_code=0&page=1&with_res_tag=0`,
       )
       if (!albumList.info) return Promise.reject(new Error('Get album list failed.'))
 
       const list = await getMusicInfosByList(albumList.info)
       const info = await this.getAlbumInfo(id)
+
+      if (info.img) {
+        list.forEach(song => {
+          if (!song.img) song.img = info.img
+        })
+      }
 
       return {
         list: list || [],
