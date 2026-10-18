@@ -1,5 +1,10 @@
 import { signRequest } from './utils'
-import { formatSingerName } from '../utils'
+import { formatPlayTime, sizeFormate } from '../../index'
+
+const getSinger = (singers) => {
+  if (!singers || !Array.isArray(singers)) return ''
+  return singers.map(s => s.name).join('、')
+}
 
 export default {
   async getDetail(id, retryNum = 0) {
@@ -70,36 +75,46 @@ export default {
       const songList = body.req.data?.song_list || []
       const total = body.req.data?.total || 0
       const list = songList.map(item => {
-        const song = item.song_info
+        const song = item.song_info || item
         if (!song) return null
         const file = song.file || {}
         const types = []
         const _types = {}
-        if (file.size_128mp3) {
-          types.push({ type: '128k', size: null })
-          _types['128k'] = { size: null }
+        if (file.size_128mp3 != 0) {
+          const size = sizeFormate(file.size_128mp3)
+          types.push({ type: '128k', size })
+          _types['128k'] = { size }
         }
-        if (file.size_320mp3) {
-          types.push({ type: '320k', size: null })
-          _types['320k'] = { size: null }
+        if (file.size_320mp3 !== 0) {
+          const size = sizeFormate(file.size_320mp3)
+          types.push({ type: '320k', size })
+          _types['320k'] = { size }
         }
-        if (file.size_flac) {
-          types.push({ type: 'flac', size: null })
-          _types.flac = { size: null }
+        if (file.size_flac !== 0) {
+          const size = sizeFormate(file.size_flac)
+          types.push({ type: 'flac', size })
+          _types.flac = { size }
         }
-        if (file.size_hires) {
-          types.push({ type: 'hires', size: null })
-          _types.hires = { size: null }
+        if (file.size_hires !== 0) {
+          const size = sizeFormate(file.size_hires)
+          types.push({ type: 'hires', size })
+          _types.hires = { size }
         }
+        const albumId = song.album?.mid || ''
         return {
-          singer: formatSingerName(song.singer),
-          name: song.name || '',
+          singer: getSinger(song.singer),
+          name: song.title || '',
           albumName: song.album?.name || '',
-          albumId: song.album?.id ? String(song.album.id) : '',
+          albumId,
           source: 'tx',
-          interval: null,
+          interval: formatPlayTime(song.interval),
+          songId: song.id ?? 0,
+          albumMid: albumId,
+          strMediaMid: song.file?.media_mid || '',
           songmid: song.mid || '',
-          img: song.album?.mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${song.album.mid}.jpg` : '',
+          img: (albumId === '' || albumId === '空')
+            ? song.singer?.length ? `https://y.gtimg.cn/music/photo_new/T001R500x500M000${song.singer[0].mid}.jpg` : ''
+            : `https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumId}.jpg`,
           lrc: null,
           otherSource: null,
           types,
