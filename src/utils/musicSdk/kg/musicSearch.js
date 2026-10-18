@@ -113,7 +113,7 @@ export default {
       const list = rawList.map(item => ({
         id: item.singerid,
         name: item.singername,
-        picUrl: `http://imge.kugou.com/stdmusic/400/singer/${item.singerid}.jpg`,
+        picUrl: `https://imge.kugou.com/stdmusic/400/singer/${item.singerid}.jpg`,
         source: 'kg',
       }))
       return {
@@ -135,7 +135,7 @@ export default {
       const list = rawList.map(item => ({
         id: item.albumid,
         name: item.albumname,
-        picUrl: '',
+        picUrl: item.imgurl ? item.imgurl.replace('{size}', '400').replace('http://', 'https://') : '',
         artistName: item.singername || '',
         artistId: item.singerid || '',
         publishTime: item.publishtime ? item.publishtime.slice(0, 10) : '',

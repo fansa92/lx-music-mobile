@@ -1,6 +1,7 @@
 import { httpFetch } from '../../request'
 import { decodeName, formatPlayTime, sizeFormate, dateFormat, formatPlayCount } from '../../index'
 import { formatSingerName } from '../utils'
+import { signRequest } from './utils'
 
 export default {
   _requestObj_tags: null,
@@ -399,34 +400,43 @@ export default {
   },
 
   search(text, page, limit = 20, retryNum = 0) {
-    if (retryNum > 5) throw new Error('max retry')
-    return httpFetch(`https://c.y.qq.com/soso/fcgi-bin/client_music_search_songlist?page_no=${page - 1}&num_per_page=${limit}&format=json&query=${encodeURIComponent(text)}&remoteplace=txt.yqq.playlist&inCharset=utf8&outCharset=utf-8`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)',
-        Referer: 'https://y.qq.com/portal/search.html',
+    if (retryNum > 5) return Promise.reject(new Error('max retry'))
+    return signRequest({
+      comm: { ct: 19, cv: 2151 },
+      req: {
+        module: 'music.search.SearchCgiService',
+        method: 'DoSearchForQQMusicDesktop',
+        param: {
+          search_type: 3,
+          query: text,
+          page_num: page,
+          num_per_page: limit,
+        },
       },
-    })
-      .promise.then(({ body }) => {
-        if (body.code != 0) return this.search(text, page, limit, ++retryNum)
-        return {
-          list: body.data.list.map(item => {
-            return {
-              play_count: formatPlayCount(item.listennum),
-              id: String(item.dissid),
-              author: decodeName(item.creator.name),
-              name: decodeName(item.dissname),
-              time: dateFormat(item.createtime, 'Y-M-D'),
-              img: item.imgurl ? item.imgurl.replace('http://', 'https://') : '',
-              total: item.song_count,
-              desc: decodeName(decodeName(item.introduction)).replace(/<br>/g, '\n'),
-              source: 'tx',
-            }
-          }),
-          limit,
-          total: body.data.sum,
+    }).then(({ body }) => {
+      const req = body?.req
+      if (!req || body.code != this.successCode || req.code != this.successCode) {
+        return this.search(text, page, limit, ++retryNum)
+      }
+      const rawList = req.data?.body?.songlist?.list || []
+      const meta = req.data?.meta || {}
+      return {
+        list: rawList.map(item => ({
+          play_count: formatPlayCount(item.listennum),
+          id: String(item.dissid),
+          author: decodeName(item.creator?.name ?? ''),
+          name: decodeName(item.dissname),
+          time: dateFormat(item.createtime, 'Y-M-D'),
+          img: item.imgurl ? item.imgurl.replace('http://', 'https://') : '',
+          total: item.song_count,
+          desc: decodeName(decodeName(item.introduction)).replace(/<br>/g, '\n'),
           source: 'tx',
-        }
-      })
+        })),
+        limit,
+        total: meta.sum || 0,
+        source: 'tx',
+      }
+    })
   },
 }
 

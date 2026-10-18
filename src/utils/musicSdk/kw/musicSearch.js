@@ -129,10 +129,11 @@ export default {
     return httpFetch(url).promise.then(({ body: result }) => {
       if (!result) return this.searchArtist(str, page, limit, retryNum)
       const rawList = result.abslist || []
+      const basePicPath = result.BASEPICPATH || ''
       const list = rawList.map(item => ({
         id: item.ARTISTID,
         name: item.ARTIST,
-        picUrl: '',
+        picUrl: item.hts_PICPATH || (item.PICPATH ? `${basePicPath.replace('http://', 'https://')}${item.PICPATH}` : ''),
         source: 'kw',
       }))
       return {
@@ -154,7 +155,7 @@ export default {
       const list = rawList.map(item => ({
         id: item.albumid,
         name: item.name,
-        picUrl: item.img ? `http://img1.kwcdn.kuwo.cn/star/albumcover/${item.img}` : (basePicPath ? `${basePicPath}/${item.pic}` : ''),
+        picUrl: item.img ? `https://img1.kwcdn.kuwo.cn/star/albumcover/${item.img}` : (basePicPath ? `${basePicPath.replace('http://', 'https://')}/${item.pic}` : ''),
         artistName: item.artist || '',
         artistId: item.artistid || '',
         source: 'kw',
