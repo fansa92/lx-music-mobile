@@ -63,6 +63,8 @@ export const filterMusicInfoList = (rawList) => {
     })
 
     const intervalTest = /(\d\d:\d\d)$/.test(item.length)
+    let img = item.albumImgs?.length ? item.albumImgs[0].img : null
+    if (img && !/https?:/.test(img)) img = 'http://d.musicapp.migu.cn' + img
 
     list.push({
       singer: formatSingerName(item.artists, 'name'),
@@ -73,7 +75,7 @@ export const filterMusicInfoList = (rawList) => {
       copyrightId: item.copyrightId,
       source: 'mg',
       interval: intervalTest ? RegExp.$1 : null,
-      img: item.albumImgs?.length ? item.albumImgs[0].img : null,
+      img,
       lrc: null,
       lrcUrl: item.lrcUrl,
       mrcUrl: item.mrcUrl,
@@ -130,6 +132,9 @@ export const filterMusicInfoListV5 = (rawList) => {
       }
     })
 
+    let img = item.img3 || item.img2 || item.img1 || null
+    if (img && !/https?:/.test(img)) img = 'http://d.musicapp.migu.cn' + img
+
     list.push({
       singer: formatSingerName(item.singerList, 'name'),
       name: item.songName,
@@ -139,7 +144,7 @@ export const filterMusicInfoListV5 = (rawList) => {
       copyrightId: item.copyrightId,
       source: 'mg',
       interval: formatPlayTime(item.duration),
-      img: item.img3 || item.img2 || item.img1 || null,
+      img,
       lrc: null,
       lrcUrl: item.lrcUrl,
       mrcUrl: item.mrcUrl,
