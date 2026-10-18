@@ -221,6 +221,8 @@
   "search_hot_search": "热门搜索",
   "search_type_music": "歌曲",
   "search_type_songlist": "歌单",
+  "search_type_artist": "歌手",
+  "search_type_album": "专辑",
   "setting__other_dislike_list": "「不喜欢的歌曲」规则",
   "setting__other_dislike_list_label": "规则数量：{num}",
   "setting__other_dislike_list_saved_tip": "已保存",

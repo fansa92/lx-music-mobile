@@ -400,15 +400,14 @@ export default {
 
   search(text, page, limit = 20, retryNum = 0) {
     if (retryNum > 5) throw new Error('max retry')
-    return httpFetch(`http://c.y.qq.com/soso/fcgi-bin/client_music_search_songlist?page_no=${page - 1}&num_per_page=${limit}&format=json&query=${encodeURIComponent(text)}&remoteplace=txt.yqq.playlist&inCharset=utf8&outCharset=utf-8`, {
+    return httpFetch(`https://c.y.qq.com/soso/fcgi-bin/client_music_search_songlist?page_no=${page - 1}&num_per_page=${limit}&format=json&query=${encodeURIComponent(text)}&remoteplace=txt.yqq.playlist&inCharset=utf8&outCharset=utf-8`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)',
-        Referer: 'http://y.qq.com/portal/search.html',
+        Referer: 'https://y.qq.com/portal/search.html',
       },
     })
       .promise.then(({ body }) => {
         if (body.code != 0) return this.search(text, page, limit, ++retryNum)
-        // console.log(body.data.list)
         return {
           list: body.data.list.map(item => {
             return {
@@ -417,8 +416,7 @@ export default {
               author: decodeName(item.creator.name),
               name: decodeName(item.dissname),
               time: dateFormat(item.createtime, 'Y-M-D'),
-              img: item.imgurl,
-              // grade: item.favorcnt / 10,
+              img: item.imgurl ? item.imgurl.replace('http://', 'https://') : '',
               total: item.song_count,
               desc: decodeName(decodeName(item.introduction)).replace(/<br>/g, '\n'),
               source: 'tx',

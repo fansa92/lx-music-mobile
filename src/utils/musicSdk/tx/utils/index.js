@@ -9,6 +9,8 @@ export const signRequest = async(data) => {
     method: 'post',
     headers: {
       'User-Agent': 'QQMusic 14090508(android 12)',
+      'Referer': 'https://y.qq.com',
+      'Origin': 'https://y.qq.com',
     },
     body: data,
   }).promise

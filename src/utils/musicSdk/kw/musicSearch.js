@@ -123,4 +123,49 @@ export default {
       })
     })
   },
+  searchArtist(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const url = `http://search.kuwo.cn/r.s?client=kt&all=${encodeURIComponent(str)}&pn=${page - 1}&rn=${limit}&ft=artist&encoding=utf8&rformat=json&mobi=1`
+    return httpFetch(url).promise.then(({ body: result }) => {
+      if (!result) return this.searchArtist(str, page, limit, retryNum)
+      const rawList = result.abslist || []
+      const list = rawList.map(item => ({
+        id: item.ARTISTID,
+        name: item.ARTIST,
+        picUrl: '',
+        source: 'kw',
+      }))
+      return {
+        list,
+        total: parseInt(result.TOTAL) || 0,
+        allPage: Math.ceil((parseInt(result.TOTAL) || 0) / limit),
+        limit,
+        source: 'kw',
+      }
+    })
+  },
+  searchAlbum(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const url = `http://search.kuwo.cn/r.s?client=kt&all=${encodeURIComponent(str)}&pn=${page - 1}&rn=${limit}&ft=album&encoding=utf8&rformat=json&mobi=1`
+    return httpFetch(url).promise.then(({ body: result }) => {
+      if (!result) return this.searchAlbum(str, page, limit, retryNum)
+      const rawList = result.albumlist || []
+      const basePicPath = result.BASEPICPATH || ''
+      const list = rawList.map(item => ({
+        id: item.albumid,
+        name: item.name,
+        picUrl: item.img ? `http://img1.kwcdn.kuwo.cn/star/albumcover/${item.img}` : (basePicPath ? `${basePicPath}/${item.pic}` : ''),
+        artistName: item.artist || '',
+        artistId: item.artistid || '',
+        source: 'kw',
+      }))
+      return {
+        list,
+        total: parseInt(result.TOTAL) || 0,
+        allPage: Math.ceil((parseInt(result.TOTAL) || 0) / limit),
+        limit,
+        source: 'kw',
+      }
+    })
+  },
 }

@@ -104,4 +104,50 @@ export default {
       })
     })
   },
+  searchArtist(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const url = `http://msearch.kugou.com/api/v3/search/singer?keyword=${encodeURIComponent(str)}&page=${page}&pagesize=${limit}`
+    return httpFetch(url).promise.then(({ body }) => {
+      if (!body || body.status !== 1) return this.searchArtist(str, page, limit, retryNum)
+      const rawList = body.data || []
+      const list = rawList.map(item => ({
+        id: item.singerid,
+        name: item.singername,
+        picUrl: `http://imge.kugou.com/stdmusic/400/singer/${item.singerid}.jpg`,
+        source: 'kg',
+      }))
+      return {
+        list,
+        total: rawList.length < limit ? (page - 1) * limit + rawList.length : (page + 1) * limit,
+        allPage: rawList.length < limit ? page : page + 1,
+        limit,
+        source: 'kg',
+      }
+    })
+  },
+  searchAlbum(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const url = `http://msearch.kugou.com/api/v3/search/album?keyword=${encodeURIComponent(str)}&page=${page}&pagesize=${limit}&show_total=1`
+    return httpFetch(url).promise.then(({ body }) => {
+      if (!body || body.status !== 1) return this.searchAlbum(str, page, limit, retryNum)
+      const rawList = body.data?.info || []
+      const total = body.data?.total || 0
+      const list = rawList.map(item => ({
+        id: item.albumid,
+        name: item.albumname,
+        picUrl: '',
+        artistName: item.singername || '',
+        artistId: item.singerid || '',
+        publishTime: item.publishtime ? item.publishtime.slice(0, 10) : '',
+        source: 'kg',
+      }))
+      return {
+        list,
+        total,
+        allPage: Math.ceil(total / limit),
+        limit,
+        source: 'kg',
+      }
+    })
+  },
 }

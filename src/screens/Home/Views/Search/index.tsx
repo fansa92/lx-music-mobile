@@ -19,8 +19,10 @@ import { addHistoryWord } from '@/core/search/search'
 interface SearchInfo {
   temp_source: LX.OnlineSource
   source: LX.OnlineSource | 'all'
-  searchType: 'music' | 'songlist'
+  searchType: 'music' | 'songlist' | 'artist' | 'album'
 }
+
+const ARTIST_ALBUM_SOURCES: Array<LX.OnlineSource | 'all'> = ['kw', 'wy', 'tx', 'kg', 'mg']
 
 export default () => {
   const headerBarRef = useRef<HeaderBarType>(null)
@@ -43,6 +45,10 @@ export default () => {
         case 'songlist':
           headerBarRef.current?.setSourceList(searchSonglistState.sources, info.source)
           break
+        case 'artist':
+        case 'album':
+          headerBarRef.current?.setSourceList(ARTIST_ALBUM_SOURCES, info.source === 'all' || !ARTIST_ALBUM_SOURCES.includes(info.source as LX.OnlineSource) ? 'kw' : info.source)
+          break
       }
       headerBarRef.current?.setText(searchState.searchText)
       listRef.current?.loadList(searchState.searchText, searchInfo.current.source, searchInfo.current.searchType)
@@ -51,6 +57,17 @@ export default () => {
     const handleTypeChange = (type: SearchType) => {
       searchInfo.current.searchType = type
       void saveSearchSetting({ type })
+      if (type === 'artist' || type === 'album') {
+        if (!ARTIST_ALBUM_SOURCES.includes(searchInfo.current.source as LX.OnlineSource)) {
+          searchInfo.current.source = 'kw'
+          void saveSearchSetting({ source: 'kw' })
+        }
+        headerBarRef.current?.setSourceList(ARTIST_ALBUM_SOURCES, searchInfo.current.source)
+      } else if (type === 'music') {
+        headerBarRef.current?.setSourceList(searchMusicState.sources, searchInfo.current.source)
+      } else {
+        headerBarRef.current?.setSourceList(searchSonglistState.sources, searchInfo.current.source)
+      }
       listRef.current?.loadList(searchState.searchText, searchInfo.current.source, type)
     }
     global.app_event.on('searchTypeChanged', handleTypeChange)

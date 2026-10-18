@@ -220,4 +220,54 @@ export default {
       }
     })
   },
+  searchArtist(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const searchSwitch = JSON.stringify({ song: 0, album: 0, singer: 1, tagSong: 0, mvSong: 0, songlist: 0, bestShow: 0 })
+    const url = `https://app.c.nf.migu.cn/MIGUM2.0/v1.0/content/search_all.do?isCopyright=1&isCorrect=1&pageNo=${page}&pageSize=${limit}&searchSwitch=${encodeURIComponent(searchSwitch)}&text=${encodeURIComponent(str)}`
+    return httpFetch(url).promise.then(({ body }) => {
+      if (!body || body.code !== '000000') return this.searchArtist(str, page, limit, retryNum)
+      const singerData = body.singerResultData || {}
+      const rawList = singerData.result || []
+      const total = parseInt(singerData.totalCount) || 0
+      const list = rawList.map(item => ({
+        id: item.id,
+        name: item.name,
+        picUrl: '',
+        source: 'mg',
+      }))
+      return {
+        list,
+        total,
+        allPage: Math.ceil(total / limit),
+        limit,
+        source: 'mg',
+      }
+    })
+  },
+  searchAlbum(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const searchSwitch = JSON.stringify({ song: 0, album: 1, singer: 0, tagSong: 0, mvSong: 0, songlist: 0, bestShow: 0 })
+    const url = `https://app.c.nf.migu.cn/MIGUM2.0/v1.0/content/search_all.do?isCopyright=1&isCorrect=1&pageNo=${page}&pageSize=${limit}&searchSwitch=${encodeURIComponent(searchSwitch)}&text=${encodeURIComponent(str)}`
+    return httpFetch(url).promise.then(({ body }) => {
+      if (!body || body.code !== '000000') return this.searchAlbum(str, page, limit, retryNum)
+      const albumData = body.albumResultData || {}
+      const rawList = albumData.result || []
+      const total = parseInt(albumData.totalCount) || 0
+      const list = rawList.map(item => ({
+        id: item.id,
+        name: item.name,
+        picUrl: item.imgItems?.[0]?.img || '',
+        artistName: item.singer || '',
+        publishTime: item.publishDate || '',
+        source: 'mg',
+      }))
+      return {
+        list,
+        total,
+        allPage: Math.ceil(total / limit),
+        limit,
+        source: 'mg',
+      }
+    })
+  },
 }

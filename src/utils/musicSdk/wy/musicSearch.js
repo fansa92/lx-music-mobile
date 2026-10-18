@@ -117,4 +117,65 @@ export default {
       // return result.data
     })
   },
+  searchArtist(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const searchRequest = eapiRequest('/api/cloudsearch/pc', {
+      s: str,
+      type: 100,
+      limit,
+      total: page == 1,
+      offset: limit * (page - 1),
+    })
+    return searchRequest.promise.then(({ body: result }) => {
+      if (!result || result.code !== 200) return this.searchArtist(str, page, limit, retryNum)
+      const rawList = result.result?.artists || []
+      const list = rawList.map(item => ({
+        id: item.id,
+        name: item.name,
+        picUrl: item.picUrl || item.img1v1Url || '',
+        alias: item.alias || [],
+        albumSize: item.albumSize || 0,
+        musicSize: item.musicSize || 0,
+        source: 'wy',
+      }))
+      return {
+        list,
+        total: result.result?.artistCount || 0,
+        allPage: Math.ceil((result.result?.artistCount || 0) / limit),
+        limit,
+        source: 'wy',
+      }
+    })
+  },
+  searchAlbum(str, page = 1, limit = 20, retryNum = 0) {
+    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+    const searchRequest = eapiRequest('/api/cloudsearch/pc', {
+      s: str,
+      type: 10,
+      limit,
+      total: page == 1,
+      offset: limit * (page - 1),
+    })
+    return searchRequest.promise.then(({ body: result }) => {
+      if (!result || result.code !== 200) return this.searchAlbum(str, page, limit, retryNum)
+      const rawList = result.result?.albums || []
+      const list = rawList.map(item => ({
+        id: item.id,
+        name: item.name,
+        picUrl: item.picUrl || '',
+        artistName: item.artist?.name || '',
+        artistId: item.artist?.id || '',
+        size: item.size || 0,
+        publishTime: item.publishTime ? new Date(item.publishTime).toISOString().slice(0, 10) : '',
+        source: 'wy',
+      }))
+      return {
+        list,
+        total: result.result?.albumCount || 0,
+        allPage: Math.ceil((result.result?.albumCount || 0) / limit),
+        limit,
+        source: 'wy',
+      }
+    })
+  },
 }
