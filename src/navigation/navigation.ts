@@ -1,10 +1,12 @@
-import { Navigation } from 'react-native-navigation'
+import { Navigation, type Options } from 'react-native-navigation'
 // import { InteractionManager } from 'react-native'
 
 import {
   HOME_SCREEN,
   PLAY_DETAIL_SCREEN,
   SONGLIST_DETAIL_SCREEN,
+  ARTIST_DETAIL_SCREEN,
+  ALBUM_DETAIL_SCREEN,
   COMMENT_SCREEN,
   // SETTING_SCREEN,
 } from './screenNames'
@@ -303,6 +305,88 @@ export function pushSonglistDetailScreen(componentId: string, info: ListInfoItem
     })
   })
 }
+export interface ArtistInfoPassProps {
+  id: string
+  name: string
+}
+export interface AlbumInfoPassProps {
+  id: string
+  name: string
+  author?: string
+  img?: string
+  artists?: Array<{ id: string, name: string }>
+  size?: number
+  publishTime?: number
+}
+
+const pushDetailOptions = (): Options => {
+  const theme = themeState.theme
+  return {
+    topBar: {
+      visible: false,
+      height: 0,
+      drawBehind: false,
+    },
+    statusBar: {
+      drawBehind: true,
+      visible: true,
+      style: getStatusBarStyle(theme.isDark),
+      backgroundColor: 'transparent',
+    },
+    navigationBar: {
+      // visible: false,
+      backgroundColor: theme['c-content-background'],
+    },
+    layout: {
+      componentBackgroundColor: theme['c-content-background'],
+    },
+    animations: {
+      push: {
+        content: {
+          translationX: {
+            from: windowSizeTools.getSize().width,
+            to: 0,
+            duration: 300,
+          },
+        },
+      },
+      pop: {
+        content: {
+          translationX: {
+            from: 0,
+            to: windowSizeTools.getSize().width,
+            duration: 300,
+          },
+        },
+      },
+    },
+  }
+}
+
+export function pushArtistDetailScreen(componentId: string, artistInfo: ArtistInfoPassProps) {
+  requestAnimationFrame(() => {
+    void Navigation.push(componentId, {
+      component: {
+        name: ARTIST_DETAIL_SCREEN,
+        passProps: { artistInfo },
+        options: pushDetailOptions(),
+      },
+    })
+  })
+}
+
+export function pushAlbumDetailScreen(componentId: string, albumInfo: AlbumInfoPassProps) {
+  requestAnimationFrame(() => {
+    void Navigation.push(componentId, {
+      component: {
+        name: ALBUM_DETAIL_SCREEN,
+        passProps: { albumInfo },
+        options: pushDetailOptions(),
+      },
+    })
+  })
+}
+
 export function pushCommentScreen(componentId: string) {
   /*
     Navigation.setDefaultOptions({

@@ -1,12 +1,14 @@
 import { forwardRef, useImperativeHandle, useRef, useState, useCallback, memo } from 'react'
-import { FlatList, RefreshControl, View } from 'react-native'
+import { FlatList, RefreshControl, TouchableOpacity, View } from 'react-native'
 import musicSdk from '@/utils/musicSdk'
 import { useTheme } from '@/store/theme/hook'
-import { createStyle } from '@/utils/tools'
+import { createStyle, toast } from '@/utils/tools'
 import Text from '@/components/common/Text'
 import Image from '@/components/common/Image'
 import { BorderRadius } from '@/theme'
 import { scaleSizeW } from '@/utils/pixelRatio'
+import { navigations } from '@/navigation'
+import commonState from '@/store/common/state'
 
 type SearchType = 'artist' | 'album'
 
@@ -51,12 +53,36 @@ interface SearchResultListProps {
 
 const imgSize = scaleSizeW(60)
 
-const ArtistItem = memo(({ item }: { item: ArtistItem }) => {
+const ARTIST_ALBUM_SOURCES: LX.OnlineSource[] = ['kw', 'wy', 'tx', 'kg', 'mg']
+
+const handleItemPress = (searchType: SearchType, item: ListItem) => {
+  if (item.source !== 'wy') {
+    toast('当前仅支持查看网易云音乐的歌手和专辑详情')
+    return
+  }
+  const componentId = commonState.componentIds.home
+  if (!componentId) return
+  if (searchType === 'artist') {
+    navigations.pushArtistDetailScreen(componentId, { id: String(item.id), name: item.name })
+  } else {
+    const albumItem = item as AlbumItem
+    navigations.pushAlbumDetailScreen(componentId, {
+      id: String(albumItem.id),
+      name: albumItem.name,
+      author: albumItem.artistName,
+      img: albumItem.picUrl,
+      size: albumItem.size,
+      publishTime: albumItem.publishTime ? new Date(albumItem.publishTime).getTime() : undefined,
+    })
+  }
+}
+
+const ArtistItemComp = memo(({ item }: { item: ArtistItem }) => {
   const theme = useTheme()
   const alias = item.alias?.length ? item.alias.join('/') : ''
 
   return (
-    <View style={styles.item}>
+    <TouchableOpacity style={styles.item} onPress={() => { handleItemPress('artist', item) }} activeOpacity={0.6}>
       <Image
         url={item.picUrl}
         style={{ ...styles.avatar, borderColor: theme['c-border-background'] }}
@@ -71,15 +97,15 @@ const ArtistItem = memo(({ item }: { item: ArtistItem }) => {
           </Text>
         ) : null}
       </View>
-    </View>
+    </TouchableOpacity>
   )
 })
 
-const AlbumItem = memo(({ item }: { item: AlbumItem }) => {
+const AlbumItemComp = memo(({ item }: { item: AlbumItem }) => {
   const theme = useTheme()
 
   return (
-    <View style={styles.item}>
+    <TouchableOpacity style={styles.item} onPress={() => { handleItemPress('album', item) }} activeOpacity={0.6}>
       <Image
         url={item.picUrl}
         style={{ ...styles.cover, borderColor: theme['c-border-background'] }}
@@ -92,7 +118,7 @@ const AlbumItem = memo(({ item }: { item: AlbumItem }) => {
           <Text size={11} color={theme['c-font-label']}>{item.publishTime}</Text>
         ) : null}
       </View>
-    </View>
+    </TouchableOpacity>
   )
 })
 
@@ -103,7 +129,21 @@ export default forwardRef<SearchResultListType, SearchResultListProps>(({ search
   const searchInfoRef = useRef({ text: '', page: 1, hasMore: true, source: 'kw' as string })
   const theme = useTheme()
 
-  const doSearch = useCallback((text: string, page: number, source: string): Promise<SearchResult> => {
+  const doSearch = useCallback(async(text: string, page: number, source: string): Promise<SearchResult> => {
+    if (source === 'all') {
+      const tasks = ARTIST_ALBUM_SOURCES.map(async(s) => {
+        const sdk = musicSdk[s] as any
+        const method = searchType === 'artist' ? sdk.musicSearch.searchArtist : sdk.musicSearch.searchAlbum
+        return (method.call(sdk.musicSearch, text, page) as Promise<SearchResult>).catch(() => ({ list: [], total: 0, allPage: 0, limit: 20, source: s }))
+      })
+      return Promise.all(tasks).then(results => ({
+        list: results.flatMap(r => r.list),
+        total: results.reduce((sum, r) => sum + r.total, 0),
+        allPage: Math.max(...results.map(r => r.allPage)),
+        limit: 20,
+        source: 'all',
+      }))
+    }
     const sdk = musicSdk[source as keyof typeof musicSdk] as any
     if (!sdk?.musicSearch) return Promise.reject(new Error('source not found'))
 
@@ -154,9 +194,9 @@ export default forwardRef<SearchResultListType, SearchResultListProps>(({ search
 
   const renderItem = ({ item }: { item: ListItem }) => {
     if (searchType === 'artist') {
-      return <ArtistItem item={item as ArtistItem} />
+      return <ArtistItemComp item={item as ArtistItem} />
     }
-    return <AlbumItem item={item as AlbumItem} />
+    return <AlbumItemComp item={item as AlbumItem} />
   }
 
   const keyExtractor = (item: ListItem) => `${item.source}_${item.id}`
