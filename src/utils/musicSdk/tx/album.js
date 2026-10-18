@@ -21,8 +21,8 @@ export default {
           module: 'music.musicserviceAlbum.AlbumInfoInterface',
           method: 'GetAlbumDetail',
           param: {
-            album_id: id,
-            album_mid: '',
+            album_id: 0,
+            album_mid: id,
           },
         },
       })

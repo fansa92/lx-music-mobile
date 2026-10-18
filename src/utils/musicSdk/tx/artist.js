@@ -21,8 +21,8 @@ export default {
           module: 'music.musicserviceSinger.SingerInfoInterface',
           method: 'GetSingerDetail',
           param: {
-            singer_id: id,
-            singer_mid: '',
+            singer_id: 0,
+            singer_mid: id,
           },
         },
       })
@@ -60,8 +60,8 @@ export default {
           module: 'music.musicserviceSinger.SingerSongListInterface',
           method: 'GetSingerSongList',
           param: {
-            singer_id: id,
-            singer_mid: '',
+            singer_id: 0,
+            singer_mid: id,
             order: order === 'hot' ? 'listen' : 'time',
             begin: offset,
             num: limit,
@@ -146,8 +146,8 @@ export default {
           module: 'music.musicserviceSinger.SingerAlbumListInterface',
           method: 'GetSingerAlbumList',
           param: {
-            singer_id: id,
-            singer_mid: '',
+            singer_id: 0,
+            singer_mid: id,
             begin: offset,
             num: limit,
           },
