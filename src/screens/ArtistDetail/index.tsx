@@ -6,6 +6,7 @@ import Header from './Header'
 import SongList from './SongList'
 import wyApi from '@/utils/musicSdk/wy/artist'
 import kgApi from '@/utils/musicSdk/kg/artist'
+import txApi from '@/utils/musicSdk/tx/artist'
 import { createStyle, toast } from '@/utils/tools'
 import { setComponentId } from '@/core/common'
 import PlayerBar from '@/components/player/PlayerBar'
@@ -26,6 +27,7 @@ export interface ArtistInfo {
 const getApi = (source?: string) => {
   switch (source) {
     case 'kg': return kgApi
+    case 'tx': return txApi
     default: return wyApi
   }
 }

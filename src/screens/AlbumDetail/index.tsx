@@ -8,6 +8,7 @@ import wyApi from '@/utils/musicSdk/wy/album'
 import kgApi from '@/utils/musicSdk/kg/album'
 import kwApi from '@/utils/musicSdk/kw/album'
 import mgApi from '@/utils/musicSdk/mg/album'
+import txApi from '@/utils/musicSdk/tx/album'
 import { createStyle, toast } from '@/utils/tools'
 import { setComponentId } from '@/core/common'
 import PlayerBar from '@/components/player/PlayerBar'
@@ -32,6 +33,7 @@ const getApi = (source?: string) => {
     case 'kg': return kgApi
     case 'kw': return kwApi
     case 'mg': return mgApi
+    case 'tx': return txApi
     default: return wyApi
   }
 }
