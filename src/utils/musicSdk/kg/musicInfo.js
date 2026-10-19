@@ -1,5 +1,5 @@
 import { decodeName, formatPlayTime, sizeFormate } from '../../index'
-import { createHttpFetch } from './util'
+import { createHttpFetch, formatKgImg } from './util'
 
 const createGetMusicInfosTask = (hashs) => {
   let data = {
@@ -93,6 +93,72 @@ export const filterMusicInfoList = (rawList) => {
         : null,
       lrc: null,
       hash: item.audio_info.hash,
+      otherSource: null,
+      types,
+      _types,
+      typeUrl: {},
+    })
+  })
+  return list
+}
+
+// 新接口的音质字段可能是数字也可能是字符串，0 / '0' / 空都表示没有该音质
+const createTypesFromAudioInfo = (audioInfo) => {
+  const types = []
+  const _types = {}
+  const add = (type, size, hash) => {
+    if (!hash || size === undefined || size === null || size === '0' || size === 0) return
+    const sizeText = sizeFormate(parseInt(size))
+    types.push({ type, size: sizeText, hash })
+    _types[type] = { size: sizeText, hash }
+  }
+  add('128k', audioInfo.filesize, audioInfo.hash)
+  add('320k', audioInfo.filesize_320, audioInfo.hash_320)
+  add('flac', audioInfo.filesize_flac, audioInfo.hash_flac)
+  add('flac24bit', audioInfo.filesize_high, audioInfo.hash_high)
+  return { types, _types }
+}
+
+/**
+ * 转换 openapi 接口返回的歌曲列表
+ *
+ * 兼容两种结构：
+ * - /openapi/kmr/v2/audio_group/author：audio_id、audio_name、album_id 在顶层
+ * - /v1/album_audio/lite：audio_id、audio_name、album_id 在 base 里
+ * 两者的时长字段也不同（timelength / duration），单位都是毫秒
+ *
+ * @param {Array} rawList
+ * @param {string|number} [albumId] 兜底专辑 id（专辑歌曲接口里部分曲目没有 album_id）
+ * @param {string} [albumName] 兜底专辑名
+ */
+export const filterAudioGroupList = (rawList, albumId, albumName) => {
+  const ids = new Set()
+  const list = []
+  rawList.forEach(item => {
+    if (!item) return
+    const base = item.base || item
+    const audioInfo = item.audio_info || {}
+    const audioId = base.audio_id ?? audioInfo.audio_id
+    if (!audioId || ids.has(String(audioId))) return
+    ids.add(String(audioId))
+
+    const album = item.album_info || {}
+    const authors = (item.authors || []).map(author => author?.base || author)
+    const singer = item.author_name || authors.map(author => author?.author_name).filter(Boolean).join('、')
+    const duration = parseInt(audioInfo.timelength ?? audioInfo.duration ?? 0)
+    const { types, _types } = createTypesFromAudioInfo(audioInfo)
+
+    list.push({
+      singer: decodeName(singer),
+      name: decodeName(base.audio_name),
+      albumName: decodeName(album.album_name || albumName || ''),
+      albumId: album.album_id ?? base.album_id ?? albumId,
+      songmid: audioId,
+      source: 'kg',
+      interval: formatPlayTime(duration / 1000),
+      img: formatKgImg(album.sizable_cover || album.cover || item.trans_param?.union_cover) || null,
+      lrc: null,
+      hash: audioInfo.hash,
       otherSource: null,
       types,
       _types,

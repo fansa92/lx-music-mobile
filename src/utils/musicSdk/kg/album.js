@@ -1,5 +1,10 @@
-import { getMusicInfosByList } from './musicInfo'
-import { createHttpFetch } from './util'
+import { filterAudioGroupList } from './musicInfo'
+import { createKgGatewayFetch, formatKgImg } from './util'
+
+// 专辑歌曲接口单页最多 50 首，超过会返回 error_code=20010
+const SONG_PAGE_LIMIT = 50
+// 单张专辑最多取 20 页，避免异常数据导致死循环
+const MAX_PAGE = 20
 
 // 酷狗的时间格式为 "2026-03-25 00:00:00"，iOS 下直接 new Date 会得到 Invalid Date
 const parseTime = (str) => {
@@ -8,56 +13,71 @@ const parseTime = (str) => {
   return Number.isNaN(time) ? 0 : time
 }
 
-const formatCover = (url) => {
-  if (!url) return ''
-  return url.replace('{size}', '480').replace(/^http:\/\//, 'https://')
-}
-
 export default {
   async getAlbumInfo(id) {
-    // 旧接口 kmrserviceretry.kugou.com/container/v1/album 的签名已失效（返回 sign error），改用移动端的专辑信息接口
-    const body = await createHttpFetch(`http://mobiles.kugou.com/api/v3/album/info?albumid=${id}`)
-    if (!body || !body.albumname) return Promise.reject(new Error('get album info failed.'))
+    const body = await createKgGatewayFetch({
+      url: '/kmr/v2/albums',
+      method: 'post',
+      data: {
+        data: [{ album_id: Number(id) || id }],
+        is_buy: 0,
+        fields: 'album_id,album_name,publish_date,sizable_cover,intro,language,is_publish,heat,type,quality,authors,exclusive,author_name,trans_param',
+      },
+      router: 'openapi.kugou.com',
+      kgTid: 255,
+    })
+    const info = body.data?.[0]
+    // 专辑不存在时接口仍返回 status=1，只是 data 里是一个空对象
+    if (!info?.album_id) return Promise.reject(new Error('get album info failed.'))
 
     return {
-      name: body.albumname,
-      img: formatCover(body.imgurl),
-      desc: body.intro,
-      author: body.singername,
-      artistId: body.singerid,
-      publishTime: parseTime(body.publishtime),
-      size: body.songcount || 0,
+      name: info.album_name,
+      img: formatKgImg(info.sizable_cover),
+      desc: info.intro,
+      author: info.author_name,
+      publishTime: parseTime(info.publish_date),
+      size: info.song_count || 0,
+      artists: (info.authors || []).map(author => ({ id: String(author.author_id), name: author.author_name })),
     }
   },
 
   async getAlbum(id, albumName, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取专辑详情失败'))
     try {
-      const albumList = await createHttpFetch(
-        `http://mobiles.kugou.com/api/v3/album/song?version=9108&albumid=${id}&plat=0&pagesize=200&area_code=0&page=1&with_res_tag=0`,
-      )
-      if (!albumList.info) throw new Error('Get album list failed.')
-
-      const list = await getMusicInfosByList(albumList.info)
       const info = await this.getAlbumInfo(id)
-
-      if (info.img) {
-        list.forEach(song => {
-          if (!song.img) song.img = info.img
+      const list = []
+      for (let page = 1; page <= MAX_PAGE; page++) {
+        const body = await createKgGatewayFetch({
+          url: '/v1/album_audio/lite',
+          method: 'post',
+          data: {
+            album_id: Number(id) || id,
+            is_buy: '',
+            page,
+            pagesize: SONG_PAGE_LIMIT,
+          },
+          router: 'openapi.kugou.com',
+          kgTid: 255,
         })
+        const rawList = body.data?.songs || []
+        if (!rawList.length) break
+        list.push(...filterAudioGroupList(rawList, id, info.name))
+        const total = body.data?.total || 0
+        if (total && list.length >= total) break
       }
+      if (!list.length) throw new Error('Get album list failed.')
 
       return {
-        list: list || [],
+        list,
         info: {
           name: info.name,
           img: info.img,
           desc: info.desc,
           author: info.author,
-          // 专辑信息接口的 songcount 经常是 0，这里用实际歌曲数兜底
+          // 专辑信息接口的 song_count 经常缺失，这里用实际歌曲数兜底
           size: info.size || list.length,
           publishTime: info.publishTime,
-          artists: info.author ? [{ id: String(info.artistId ?? ''), name: info.author }] : [],
+          artists: info.artists,
         },
       }
     } catch (err) {

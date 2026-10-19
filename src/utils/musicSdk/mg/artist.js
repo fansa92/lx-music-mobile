@@ -1,13 +1,6 @@
 import { filterMusicInfoListV5 } from './musicInfo'
-import { toMD5 } from '../utils'
+import { searchByJadeite } from './musicSearch'
 import { httpFetch } from '../../request'
-
-const createSignature = (time, str) => {
-  const deviceId = '963B7AA0D21511ED807EE5846EC87D20'
-  const signatureMd5 = '6cdc72a439cef99a3418d2a78aa28c73'
-  const sign = toMD5(`${str}${signatureMd5}yyapp2d16148780a1dcc7408e06336b98cfd50${deviceId}${time}`)
-  return { sign, deviceId }
-}
 
 const getSingerInfo = async(id) => {
   const { body } = await httpFetch(
@@ -24,25 +17,11 @@ const getSingerInfo = async(id) => {
 }
 
 const searchBySinger = async(singerName, singerId, page, pageSize, type) => {
-  const time = Date.now().toString()
-  const signData = createSignature(time, singerName)
   const searchSwitch = type === 'album'
-    ? JSON.stringify({ song: 0, album: 1, singer: 0, tagSong: 0, mvSong: 0, bestShow: 0, songlist: 0, lyricSong: 0 })
-    : JSON.stringify({ song: 1, album: 0, singer: 0, tagSong: 0, mvSong: 0, bestShow: 0, songlist: 0, lyricSong: 0 })
+    ? { song: 0, album: 1, singer: 0, tagSong: 0, mvSong: 0, bestShow: 0, songlist: 0, lyricSong: 0 }
+    : { song: 1, album: 0, singer: 0, tagSong: 0, mvSong: 0, bestShow: 0, songlist: 0, lyricSong: 0 }
 
-  const { body } = await httpFetch(
-    `https://jadeite.migu.cn/music_search/v3/search/searchAll?isCorrect=0&isCopyright=1&searchSwitch=${encodeURIComponent(searchSwitch)}&pageSize=${pageSize}&text=${encodeURIComponent(singerName)}&pageNo=${page}&sort=0&sid=USS`,
-    {
-      headers: {
-        uiVersion: 'A_music_3.6.1',
-        deviceId: signData.deviceId,
-        timestamp: time,
-        sign: signData.sign,
-        channel: '0146921',
-        'User-Agent': 'Mozilla/5.0 (Linux; U; Android 11.0.0; zh-cn; MI 11 Build/OPR1.170623.032) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30',
-      },
-    },
-  ).promise
+  const body = await searchByJadeite(singerName, searchSwitch, page, pageSize)
 
   if (body?.code !== '000000') return { list: [], total: 0 }
 

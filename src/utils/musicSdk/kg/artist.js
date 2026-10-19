@@ -1,12 +1,9 @@
-import { httpFetch } from '../../request'
-import { getMusicInfosByList } from './musicInfo'
-import { createHttpFetch } from './util'
+import { filterAudioGroupList } from './musicInfo'
+import { createKgGatewayFetch, formatKgImg } from './util'
 
-// 酷狗图片地址都会带 {size} 占位符，统一换成 https 的大图
-const formatImg = (url) => {
-  if (!url) return ''
-  return url.replace('{size}', '480').replace(/^http:\/\//, 'https://')
-}
+// 歌手歌曲接口单页最多 100 首，超过会返回 error_code=20010
+const SONG_PAGE_LIMIT = 100
+const ALBUM_PAGE_LIMIT = 200
 
 const parseTime = (str) => {
   if (!str) return 0
@@ -19,17 +16,23 @@ export default {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手信息失败'))
     if (id == 0) throw new Error('歌手不存在')
     try {
-      const requestObj = httpFetch(`http://mobiles.kugou.com/api/v5/singer/info?singerid=${id}`)
-      const { body, statusCode } = await requestObj.promise
-      if (statusCode !== 200) throw new Error('获取歌手信息失败')
+      const body = await createKgGatewayFetch({
+        url: '/kmr/v3/author',
+        method: 'post',
+        data: { author_id: Number(id) || id },
+        router: 'openapi.kugou.com',
+        kgTid: 36,
+      })
+      const info = body.data
+      if (!info?.author_name) throw new Error('获取歌手信息失败')
       return {
         source: 'kg',
         id,
-        name: body.data.singername,
-        desc: body.data.intro,
-        img: formatImg(body.data.imgurl),
-        albumSize: body.data.albumcount,
-        musicSize: body.data.songcount,
+        name: info.author_name,
+        desc: info.intro || info.long_intro || '',
+        img: formatKgImg(info.sizable_avatar),
+        albumSize: info.album_count || 0,
+        musicSize: info.song_count || 0,
       }
     } catch (err) {
       return this.getDetail(id, name, retryNum + 1)
@@ -40,19 +43,32 @@ export default {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手歌曲失败'))
     if (id == 0) throw new Error('歌手不存在')
     try {
-      const page = Math.floor(offset / limit) + 1
-      const requestObj = httpFetch(
-        `http://mobiles.kugou.com/api/v5/singer/song?singerid=${id}&page=${page}&pagesize=${limit}`,
-      )
-      const { body, statusCode } = await requestObj.promise
-      if (statusCode !== 200) throw new Error('获取歌手歌曲列表失败')
-      // 歌曲封面由 getMusicInfosByList 里的专辑封面字段直接带出来，无需额外请求
-      const list = await getMusicInfosByList(body.data.info)
+      const pageSize = Math.min(limit, SONG_PAGE_LIMIT)
+      const page = Math.floor(offset / pageSize) + 1
+      // 新版接口每首歌都带完整的音质信息与专辑封面，不用再按 hash 单独查一遍详情
+      const body = await createKgGatewayFetch({
+        url: '/openapi/kmr/v2/audio_group/author',
+        params: {
+          author_id: Number(id) || id,
+          area_code: 'all',
+          sort: order === 'time' ? 2 : 1, // 1：最热，2：最新
+          page,
+          pagesize: pageSize,
+          replace_api_version: 1,
+          mvdata_need: 1,
+          show_audio_honor: 1,
+          show_audio_tag: 1,
+          replace_need: 1,
+        },
+        kgTid: 36,
+      })
+      const rawList = body.data?.songs || []
+      const total = body.data?.total ?? body.extra?.page_total ?? 0
 
       return {
-        list,
-        total: body.data.total,
-        hasMore: page * limit < body.data.total,
+        list: filterAudioGroupList(rawList),
+        total,
+        hasMore: page * pageSize < total,
       }
     } catch (err) {
       return this.getSongs(id, order, limit, offset, name, retryNum + 1)
@@ -63,25 +79,39 @@ export default {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手专辑失败'))
     if (id == 0) throw new Error('歌手不存在')
     try {
-      const page = Math.floor(offset / limit) + 1
-      const body = await createHttpFetch(
-        `http://mobiles.kugou.com/api/v5/singer/album?singerid=${id}&page=${page}&pagesize=${limit}`,
-      )
-      if (!body?.info) throw new Error('获取歌手专辑列表失败')
-      const hotAlbums = body.info.map(item => ({
-        id: item.albumid,
-        name: item.albumname,
-        picUrl: formatImg(item.imgurl),
-        artistName: item.singername || '',
-        artistId: String(item.singerid ?? id),
-        artists: [{ id: String(item.singerid ?? id), name: item.singername || '' }],
-        size: item.songcount || 0,
-        publishTime: parseTime(item.publishtime),
+      const pageSize = Math.min(limit, ALBUM_PAGE_LIMIT)
+      const page = Math.floor(offset / pageSize) + 1
+      const body = await createKgGatewayFetch({
+        url: '/kmr/v1/author/albums',
+        method: 'post',
+        data: {
+          author_id: Number(id) || id,
+          pagesize: pageSize,
+          page,
+          sort: 1, // 1：最新，3：最热
+          category: 1,
+          area_code: 'all',
+        },
+        router: 'openapi.kugou.com',
+        kgTid: 36,
+      })
+      const rawList = body.data || []
+      const total = body.total || 0
+
+      const hotAlbums = rawList.map(item => ({
+        id: item.album_id,
+        name: item.album_name,
+        picUrl: formatKgImg(item.sizable_cover || item.cover),
+        artistName: item.author_name || '',
+        artistId: String(item.authors?.[0]?.author_id ?? id),
+        artists: (item.authors || []).map(author => ({ id: String(author.author_id), name: author.author_name })),
+        size: item.song_count || 0,
+        publishTime: parseTime(item.publish_date),
         source: 'kg',
       }))
       return {
         hotAlbums,
-        hasMore: page * limit < (body.total || 0),
+        hasMore: page * pageSize < total,
       }
     } catch (err) {
       return this.getAlbums(id, limit, offset, name, retryNum + 1)
