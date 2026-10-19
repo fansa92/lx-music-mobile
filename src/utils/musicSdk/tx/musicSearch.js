@@ -96,17 +96,18 @@ export default {
         types.push({ type: 'hires', size })
         _types.hires = { size }
       }
-      if (file.size_new?.[1] !== 0) {
+      // size_new 只有部分接口（搜索结果）会返回，歌手歌曲接口没有这个字段，这里必须判空
+      if (file.size_new?.[1]) {
         let size = sizeFormate(file.size_new[1])
         types.push({ type: 'atmos', size })
         _types.atmos = { size }
       }
-      if (file.size_new?.[2] !== 0) {
+      if (file.size_new?.[2]) {
         let size = sizeFormate(file.size_new[2])
         types.push({ type: 'atmos_plus', size })
         _types.atmos_plus = { size }
       }
-      if (file.size_new?.[0] !== 0) {
+      if (file.size_new?.[0]) {
         let size = sizeFormate(file.size_new[0])
         types.push({ type: 'master', size })
         _types.master = { size }
@@ -131,6 +132,50 @@ export default {
         img: (albumId === '' || albumId === '空')
           ? item.singer?.length ? `https://y.gtimg.cn/music/photo_new/T001R500x500M000${item.singer[0].mid}.jpg` : ''
           : `https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumId}.jpg`,
+        types,
+        _types,
+        typeUrl: {},
+      })
+    })
+    return list
+  },
+  /**
+   * 专辑详情接口（fcg_v8_album_info_cp）的曲目结构与搜索接口不同：
+   * 没有 file 对象，音质大小直接是 size128/size320/sizeflac 字段，歌曲名是 songname
+   */
+  handleAlbumResult(rawList) {
+    if (!rawList || !Array.isArray(rawList)) return []
+    const list = []
+    rawList.forEach(item => {
+      if (!item.songmid) return
+
+      const types = []
+      const _types = {}
+      const pushType = (type, size) => {
+        if (!size) return
+        const sizeStr = sizeFormate(size)
+        types.push({ type, size: sizeStr })
+        _types[type] = { size: sizeStr }
+      }
+      pushType('128k', item.size128)
+      pushType('320k', item.size320)
+      pushType('flac', item.sizeflac)
+
+      const albumMid = item.albummid ?? ''
+      list.push({
+        singer: formatSingerName(item.singer, 'name'),
+        name: item.songname || item.songorig || '',
+        albumName: item.albumname ?? '',
+        albumId: albumMid,
+        source: 'tx',
+        interval: formatPlayTime(item.interval),
+        songId: item.songid,
+        albumMid,
+        strMediaMid: item.strMediaMid || item.songmid,
+        songmid: item.songmid,
+        img: albumMid
+          ? `https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumMid}.jpg`
+          : '',
         types,
         _types,
         typeUrl: {},
