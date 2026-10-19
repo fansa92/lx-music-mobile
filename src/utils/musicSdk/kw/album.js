@@ -1,12 +1,18 @@
 import { httpFetch } from '../../request'
-import { decodeName } from '../../index'
+import { decodeName, formatPlayTime } from '../../index'
 import { formatSinger, objStr2JSON } from './util'
+
+const parseTime = (str) => {
+  if (!str) return 0
+  const time = new Date(String(str).replace(/-/g, '/')).getTime()
+  return Number.isNaN(time) ? 0 : time
+}
 
 export default {
   limit_song: 1000,
-  filterListDetail(rawList, albumName, albumId) {
+  filterListDetail(rawList, albumName, albumId, albumImg) {
     return rawList.map((item) => {
-      const formats = item.formats.split('|')
+      const formats = (item.formats || '').split('|')
       const types = []
       const _types = {}
       if (formats.includes('MP3128')) {
@@ -39,13 +45,13 @@ export default {
       }
       return {
         singer: formatSinger(decodeName(item.artist)),
-        name: decodeName(item.name),
+        name: decodeName(item.name || item.songname),
         albumName,
         albumId,
         songmid: item.id,
         source: 'kw',
-        interval: null,
-        img: item.pic,
+        interval: item.duration ? formatPlayTime(parseInt(item.duration)) : 0,
+        img: albumImg || item.pic || '',
         lrc: null,
         otherSource: null,
         types,
@@ -62,16 +68,12 @@ export default {
     )
     return requestObj_listDetail.promise.then(({ statusCode, body }) => {
       if (statusCode !== 200) return this.getAlbumListDetail(id, page, ++retryNum)
-      body = objStr2JSON(body)
+      if (typeof body === 'string') body = objStr2JSON(body)
       if (!body.musiclist) return this.getAlbumListDetail(id, page, ++retryNum)
       body.name = decodeName(body.name)
-      const albumImg = body.img || body.hts_img || ''
-      const list = this.filterListDetail(body.musiclist, body.name, body.albumid)
-      if (albumImg) {
-        list.forEach(song => {
-          if (!song.img) song.img = albumImg
-        })
-      }
+      // hts_img 是可用的 https 地址，img 指向的 img4.sycdn.kuwo.cn 已不可用
+      const albumImg = body.hts_img || body.img || ''
+      const list = this.filterListDetail(body.musiclist, body.name, body.albumid, albumImg)
       return {
         list,
         page,
@@ -83,12 +85,15 @@ export default {
           img: albumImg,
           desc: decodeName(body.info),
           author: decodeName(body.artist),
+          artists: body.artist ? [{ id: String(body.artistid ?? ''), name: decodeName(body.artist) }] : [],
+          size: parseInt(body.songnum) || 0,
+          publishTime: parseTime(body.pub || body.showtime),
         },
       }
     })
   },
 
-  async getAlbum(id, retryNum = 0) {
+  async getAlbum(id, albumName, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取专辑详情失败'))
     try {
       const result = await this.getAlbumListDetail(id, 1)
@@ -97,7 +102,7 @@ export default {
         info: result.info,
       }
     } catch (err) {
-      return this.getAlbum(id, retryNum + 1)
+      return this.getAlbum(id, albumName, retryNum + 1)
     }
   },
 }

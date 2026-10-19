@@ -19,7 +19,7 @@ export default {
     }
   },
 
-  async getAlbum(id, page = 1, retryNum = 0) {
+  async getAlbum(id, albumName, page = 1, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取专辑详情失败'))
     try {
       const list = await createHttpFetch(
@@ -40,7 +40,7 @@ export default {
         },
       }
     } catch (err) {
-      return this.getAlbum(id, page, retryNum + 1)
+      return this.getAlbum(id, albumName, page, retryNum + 1)
     }
   },
 }

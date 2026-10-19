@@ -23,12 +23,13 @@ interface Props {
   componentId: string
   albums: AlbumItem[]
   loading: boolean
+  error?: boolean
   hasMore: boolean
   onRefresh: () => void
   onLoadMore: () => void
 }
 
-export default memo(({ componentId, albums, loading, hasMore, onRefresh, onLoadMore }: Props) => {
+export default memo(({ componentId, albums, loading, error, hasMore, onRefresh, onLoadMore }: Props) => {
   const theme = useTheme()
 
   const list = useMemo(() => [...albums], [albums])
@@ -42,6 +43,8 @@ export default memo(({ componentId, albums, loading, hasMore, onRefresh, onLoadM
       artists: item.artists,
       size: item.size,
       publishTime: item.publishTime,
+      // 漏传 source 会导致专辑详情页回退到网易接口，kg/tx/kw 的专辑都打不开
+      source: item.source,
     })
   }
 
@@ -59,6 +62,7 @@ export default memo(({ componentId, albums, loading, hasMore, onRefresh, onLoadM
   const footer = () => {
     let text = ''
     if (loading && albums.length > 0) text = '加载中...'
+    else if (error && albums.length === 0) text = '加载失败，下拉可重试'
     else if (!hasMore) text = '加载完毕'
     return (
       <View style={styles.footer}>

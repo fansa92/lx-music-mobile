@@ -1,6 +1,6 @@
 import { formatPlayTime, sizeFormate } from '../../index'
 import { formatSingerName } from '../utils'
-import { signRequest } from './utils'
+import { signRequest, formatTxImg } from './utils'
 import { httpFetch } from '../../request'
 
 export default {
@@ -186,7 +186,7 @@ export default {
       const list = rawList.map(item => ({
         id: item.singerMID,
         name: item.singerName,
-        picUrl: item.singerPic ? item.singerPic.replace('/150x150/', '/500x500/') : '',
+        picUrl: formatTxImg(item.singerPic),
         albumSize: item.albumNum || 0,
         musicSize: item.songNum || 0,
         source: 'tx',
@@ -230,7 +230,7 @@ export default {
       const list = rawList.map(item => ({
         id: item.albumMID,
         name: item.albumName,
-        picUrl: item.albumPic ? item.albumPic.replace('/180x180/', '/500x500/') : '',
+        picUrl: formatTxImg(item.albumPic),
         artistName: item.singerName || '',
         artistId: item.singerMID || '',
         publishTime: item.publicTime || '',

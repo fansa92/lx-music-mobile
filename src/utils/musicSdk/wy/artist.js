@@ -6,7 +6,7 @@ const artistApi = {
    * 获取歌手详情
    * @param {string|number} id 歌手ID
    */
-  async getDetail(id, retryNum = 0) {
+  async getDetail(id, name, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手详情失败'))
     try {
       const { body } = await eapiRequest('/api/v1/artist/' + id, {}).promise
@@ -14,7 +14,7 @@ const artistApi = {
       return body.artist
     } catch (err) {
       if (retryNum >= 2) throw err
-      return artistApi.getDetail(id, retryNum + 1)
+      return artistApi.getDetail(id, name, retryNum + 1)
     }
   },
 
@@ -23,7 +23,7 @@ const artistApi = {
    * @param {string|number} id 歌手ID
    * @param {string} order 'hot' | 'time'
    */
-  async getSongs(id, order = 'hot', limit = 100, offset = 0, retryNum = 0) {
+  async getSongs(id, order = 'hot', limit = 100, offset = 0, name, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手歌曲失败'))
     try {
       const { body } = await eapiRequest('/api/v1/artist/songs', { id, order, offset, limit }).promise
@@ -52,14 +52,14 @@ const artistApi = {
       }
     } catch (err) {
       if (retryNum >= 2) throw err
-      return artistApi.getSongs(id, order, limit, offset, retryNum + 1)
+      return artistApi.getSongs(id, order, limit, offset, name, retryNum + 1)
     }
   },
 
   /**
    * 获取歌手专辑
    */
-  async getAlbums(id, limit = 100, offset = 0, retryNum = 0) {
+  async getAlbums(id, limit = 100, offset = 0, name, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手专辑失败'))
     try {
       const { body } = await eapiRequest('/api/artist/albums/' + id, { limit, offset }).promise
@@ -82,7 +82,7 @@ const artistApi = {
       }
     } catch (err) {
       if (retryNum >= 2) throw err
-      return artistApi.getAlbums(id, limit, offset, retryNum + 1)
+      return artistApi.getAlbums(id, limit, offset, name, retryNum + 1)
     }
   },
 }

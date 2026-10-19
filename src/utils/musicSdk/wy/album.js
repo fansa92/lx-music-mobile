@@ -5,8 +5,9 @@ export default {
   /**
    * 获取专辑详情和歌曲
    * @param {string|number} albumId 专辑ID
+   * @param {string} albumName 专辑名（部分源需要用它检索，网易接口不需要）
    */
-  async getAlbum(albumId, retryNum = 0) {
+  async getAlbum(albumId, albumName, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取专辑详情失败'))
     try {
       const { body } = await eapiRequest('/api/v1/album/' + albumId, {}).promise
@@ -20,7 +21,7 @@ export default {
       }
     } catch (err) {
       if (retryNum >= 2) throw err
-      return this.getAlbum(albumId, retryNum + 1)
+      return this.getAlbum(albumId, albumName, retryNum + 1)
     }
   },
 }

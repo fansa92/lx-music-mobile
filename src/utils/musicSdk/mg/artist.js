@@ -67,7 +67,7 @@ const searchBySinger = async(singerName, singerId, page, pageSize, type) => {
 }
 
 export default {
-  async getDetail(id, retryNum = 0) {
+  async getDetail(id, name, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手信息失败'))
     try {
       const info = await getSingerInfo(id)
@@ -79,11 +79,11 @@ export default {
         img: info.img,
       }
     } catch (err) {
-      return this.getDetail(id, retryNum + 1)
+      return this.getDetail(id, name, retryNum + 1)
     }
   },
 
-  async getSongs(id, order = 'hot', limit = 100, offset = 0, retryNum = 0) {
+  async getSongs(id, order = 'hot', limit = 100, offset = 0, name, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手歌曲失败'))
     try {
       const singerInfo = await getSingerInfo(id)
@@ -98,11 +98,11 @@ export default {
         hasMore: offset + limit < total,
       }
     } catch (err) {
-      return this.getSongs(id, order, limit, offset, retryNum + 1)
+      return this.getSongs(id, order, limit, offset, name, retryNum + 1)
     }
   },
 
-  async getAlbums(id, limit = 100, offset = 0, retryNum = 0) {
+  async getAlbums(id, limit = 100, offset = 0, name, retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手专辑失败'))
     try {
       const singerInfo = await getSingerInfo(id)
@@ -115,6 +115,7 @@ export default {
         picUrl: album.imgItems?.length ? album.imgItems[0].img : '',
         artistName: album.singer || singerInfo.name,
         artistId: id,
+        artists: [{ id: String(id), name: album.singer || singerInfo.name }],
         size: 0,
         publishTime: album.publishDate || '',
         source: 'mg',
@@ -125,7 +126,7 @@ export default {
         hasMore: offset + limit < total,
       }
     } catch (err) {
-      return this.getAlbums(id, limit, offset, retryNum + 1)
+      return this.getAlbums(id, limit, offset, name, retryNum + 1)
     }
   },
 }

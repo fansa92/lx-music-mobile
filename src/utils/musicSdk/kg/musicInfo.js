@@ -87,7 +87,10 @@ export const filterMusicInfoList = (rawList) => {
       songmid: item.audio_info.audio_id,
       source: 'kg',
       interval: formatPlayTime(parseInt(item.audio_info.timelength) / 1000),
-      img: null,
+      // 详情接口本来就带了专辑封面（sizable_cover），直接用，避免再单独查一次专辑封面
+      img: item.album_info.sizable_cover
+        ? item.album_info.sizable_cover.replace('{size}', '480').replace(/^http:\/\//, 'https://')
+        : null,
       lrc: null,
       hash: item.audio_info.hash,
       otherSource: null,

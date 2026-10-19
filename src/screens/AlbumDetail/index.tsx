@@ -45,16 +45,18 @@ export default memo(({ componentId, albumInfo }: { componentId: string, albumInf
 
   const loadAlbum = useCallback((isRefresh = false) => {
     listRef.current?.setStatus(isRefresh ? 'refreshing' : 'loading')
-    api.getAlbum(albumInfo.id).then((data: { info: any, list: any[] }) => {
+    // 部分源（QQ音乐、酷狗等）需要专辑名来检索歌曲，这里把名字一起传过去
+    api.getAlbum(albumInfo.id, albumInfo.name).then((data: { info: any, list: any[] }) => {
       const convertedList = data.list.map(m => toNewMusicInfo(m)) as LX.Music.MusicInfoOnline[]
-      setAlbumDetail({ info: data.info, list: convertedList })
+      // 接口没返回的字段保留列表页带过来的信息
+      setAlbumDetail({ info: { ...albumInfo, ...data.info }, list: convertedList })
       listRef.current?.setList(convertedList, false, false)
       listRef.current?.setStatus('end')
     }).catch(() => {
       toast(isRefresh ? '刷新专辑信息失败' : '获取专辑信息失败')
       listRef.current?.setStatus('error')
     })
-  }, [albumInfo.id])
+  }, [albumInfo.id, albumInfo.name])
 
   useEffect(() => {
     setComponentId(COMPONENT_IDS.albumDetail, componentId)

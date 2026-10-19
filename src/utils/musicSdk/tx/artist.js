@@ -1,184 +1,98 @@
-import { signRequest } from './utils'
-import { formatPlayTime, sizeFormate } from '../../index'
+import musicSearchApi from './musicSearch'
+import { desktopSearch, formatTxImg, parseTime } from './utils'
 
-const getSinger = (singers) => {
-  if (!singers || !Array.isArray(singers)) return ''
-  return singers.map(s => s.name).join('、')
+// 桌面搜索接口单页数量有限制，歌曲 60、专辑 40 比较稳
+const SONG_PAGE_MAX = 50
+const ALBUM_PAGE_MAX = 30
+const SINGER_SEARCH_LIMIT = 20
+
+const pickSinger = (list, id, name) => {
+  return list.find(item => item.singerMID === id) ||
+    list.find(item => item.singerName === name) ||
+    null
 }
 
 export default {
-  async getDetail(id, retryNum = 0) {
+  async getDetail(id, name = '', retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手信息失败'))
+    if (!name) throw new Error('缺少歌手名称')
     try {
-      const result = await signRequest({
-        comm: {
-          ct: '11',
-          cv: '14090508',
-          v: '14090508',
-          tmeAppID: 'qqmusic',
-        },
-        req: {
-          module: 'music.musicserviceSinger.SingerInfoInterface',
-          method: 'GetSingerDetail',
-          param: {
-            singer_id: 0,
-            singer_mid: id,
-          },
-        },
-      })
-      const body = result.body
-      if (!body || body.code !== 0 || !body.req || body.req.code !== 0) {
-        return this.getDetail(id, retryNum + 1)
-      }
-      const singer = body.req.data?.singer_info
-      if (!singer) return Promise.reject(new Error('获取歌手信息失败'))
+      const { body } = await desktopSearch(1, name, 1, SINGER_SEARCH_LIMIT)
+      const singer = pickSinger(body.singer?.list ?? [], id, name)
+      if (!singer) throw new Error('获取歌手信息失败')
       return {
         source: 'tx',
-        id: String(singer.id ?? id),
-        name: singer.name || '',
-        desc: singer.brief || '',
-        img: singer.pic?.pic_url || '',
-        albumSize: singer.album_num || 0,
-        musicSize: singer.song_num || 0,
+        id: singer.singerMID || id,
+        name: singer.singerName || name,
+        desc: '',
+        img: formatTxImg(singer.singerPic),
+        albumSize: singer.albumNum || 0,
+        musicSize: singer.songNum || 0,
       }
     } catch (err) {
-      return this.getDetail(id, retryNum + 1)
+      return this.getDetail(id, name, retryNum + 1)
     }
   },
 
-  async getSongs(id, order = 'hot', limit = 100, offset = 0, retryNum = 0) {
+  async getSongs(id, order = 'hot', limit = 100, offset = 0, name = '', retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手歌曲失败'))
+    if (!name) throw new Error('缺少歌手名称')
     try {
-      const result = await signRequest({
-        comm: {
-          ct: '11',
-          cv: '14090508',
-          v: '14090508',
-          tmeAppID: 'qqmusic',
-        },
-        req: {
-          module: 'music.musicserviceSinger.SingerSongListInterface',
-          method: 'GetSingerSongList',
-          param: {
-            singer_id: 0,
-            singer_mid: id,
-            order: order === 'hot' ? 'listen' : 'time',
-            begin: offset,
-            num: limit,
-          },
-        },
-      })
-      const body = result.body
-      if (!body || body.code !== 0 || !body.req || body.req.code !== 0) {
-        return this.getSongs(id, order, limit, offset, retryNum + 1)
+      const pageSize = Math.min(limit, SONG_PAGE_MAX)
+      const page = Math.floor(offset / limit) + 1
+      const { body, meta } = await desktopSearch(0, name, page, pageSize)
+      const allList = body.song?.list ?? []
+      const rawList = allList.filter(item =>
+        (item.singer ?? []).some(singer => singer.mid === id),
+      )
+
+      if (order === 'time') {
+        rawList.sort((a, b) => String(b.time_public ?? '').localeCompare(String(a.time_public ?? '')))
       }
-      const songList = body.req.data?.song_list || []
-      const total = body.req.data?.total || 0
-      const list = songList.map(item => {
-        const song = item.song_info || item
-        if (!song) return null
-        const file = song.file || {}
-        const types = []
-        const _types = {}
-        if (file.size_128mp3 != 0) {
-          const size = sizeFormate(file.size_128mp3)
-          types.push({ type: '128k', size })
-          _types['128k'] = { size }
-        }
-        if (file.size_320mp3 !== 0) {
-          const size = sizeFormate(file.size_320mp3)
-          types.push({ type: '320k', size })
-          _types['320k'] = { size }
-        }
-        if (file.size_flac !== 0) {
-          const size = sizeFormate(file.size_flac)
-          types.push({ type: 'flac', size })
-          _types.flac = { size }
-        }
-        if (file.size_hires !== 0) {
-          const size = sizeFormate(file.size_hires)
-          types.push({ type: 'hires', size })
-          _types.hires = { size }
-        }
-        const albumId = song.album?.mid || ''
-        return {
-          singer: getSinger(song.singer),
-          name: song.title || '',
-          albumName: song.album?.name || '',
-          albumId,
-          source: 'tx',
-          interval: formatPlayTime(song.interval),
-          songId: song.id ?? 0,
-          albumMid: albumId,
-          strMediaMid: song.file?.media_mid || '',
-          songmid: song.mid || '',
-          img: (albumId === '' || albumId === '空')
-            ? song.singer?.length ? `https://y.gtimg.cn/music/photo_new/T001R500x500M000${song.singer[0].mid}.jpg` : ''
-            : `https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumId}.jpg`,
-          lrc: null,
-          otherSource: null,
-          types,
-          _types,
-          typeUrl: {},
-        }
-      }).filter(Boolean)
+
+      const list = musicSearchApi.handleResult(rawList)
+      // 搜索结果的总数是按关键词统计的，这里按本页是否取满判断是否还有下一页
+      const hasMore = allList.length >= pageSize && rawList.length > 0
+
       return {
         list,
-        total,
-        hasMore: offset + limit < total,
+        total: meta.sum || 0,
+        hasMore,
       }
     } catch (err) {
-      return this.getSongs(id, order, limit, offset, retryNum + 1)
+      return this.getSongs(id, order, limit, offset, name, retryNum + 1)
     }
   },
 
-  async getAlbums(id, limit = 100, offset = 0, retryNum = 0) {
+  async getAlbums(id, limit = 100, offset = 0, name = '', retryNum = 0) {
     if (retryNum > 2) return Promise.reject(new Error('获取歌手专辑失败'))
+    if (!name) throw new Error('缺少歌手名称')
     try {
-      const result = await signRequest({
-        comm: {
-          ct: '11',
-          cv: '14090508',
-          v: '14090508',
-          tmeAppID: 'qqmusic',
-        },
-        req: {
-          module: 'music.musicserviceSinger.SingerAlbumListInterface',
-          method: 'GetSingerAlbumList',
-          param: {
-            singer_id: 0,
-            singer_mid: id,
-            begin: offset,
-            num: limit,
-          },
-        },
-      })
-      const body = result.body
-      if (!body || body.code !== 0 || !body.req || body.req.code !== 0) {
-        return this.getAlbums(id, limit, offset, retryNum + 1)
-      }
-      const albumList = body.req.data?.album_list || []
-      const total = body.req.data?.total || 0
-      const hotAlbums = albumList.map(item => {
-        const album = item.album_info
-        if (!album) return null
-        return {
-          id: String(album.id ?? ''),
-          name: album.name || '',
-          picUrl: album.mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${album.mid}.jpg` : '',
-          artistName: album.singer?.[0]?.name || '',
-          artistId: album.singer?.[0]?.id ? String(album.singer[0].id) : '',
-          size: 0,
-          publishTime: album.publish_date || '',
+      const pageSize = Math.min(limit, ALBUM_PAGE_MAX)
+      const page = Math.floor(offset / limit) + 1
+      const { body } = await desktopSearch(2, name, page, pageSize)
+      const rawList = body.album?.list ?? []
+      const hotAlbums = rawList
+        .filter(item => !id || item.singerMID === id)
+        .map(item => ({
+          // 专辑详情页需要专辑 mid，不能传数字 id
+          id: item.albumMID,
+          name: item.albumName,
+          picUrl: formatTxImg(item.albumPic),
+          artistName: item.singerName || '',
+          artistId: item.singerMID || '',
+          artists: item.singerName ? [{ id: item.singerMID || '', name: item.singerName }] : [],
+          size: item.song_count || 0,
+          publishTime: parseTime(item.publicTime),
           source: 'tx',
-        }
-      }).filter(Boolean)
+        }))
+
       return {
         hotAlbums,
-        hasMore: offset + limit < total,
+        hasMore: rawList.length >= pageSize && hotAlbums.length > 0,
       }
     } catch (err) {
-      return this.getAlbums(id, limit, offset, retryNum + 1)
+      return this.getAlbums(id, limit, offset, name, retryNum + 1)
     }
   },
 }

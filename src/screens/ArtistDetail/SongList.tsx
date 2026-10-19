@@ -11,8 +11,8 @@ import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager
 
 interface SongListProps {
   componentId: string
-  songs: { list: LX.Music.MusicInfoOnline[], hasMore: boolean, page: number, loading: boolean, sort: string }
-  albums: { list: any[], hasMore: boolean, page: number, loading: boolean }
+  songs: { list: LX.Music.MusicInfoOnline[], hasMore: boolean, page: number, loading: boolean, sort: string, error: boolean }
+  albums: { list: any[], hasMore: boolean, page: number, loading: boolean, error: boolean }
   activeTab: 'songs' | 'albums'
   onTabChange: (tab: 'songs' | 'albums') => void
   onLoadMoreSongs: () => void
@@ -35,12 +35,15 @@ export default memo(({
     if (activeTab === 'songs') {
       if (songs.loading && songs.list.length === 0) {
         songListRef.current?.setStatus('loading')
+      } else if (songs.error && songs.list.length === 0) {
+        // 加载失败时不能停在 idle（列表为空又一直转圈），要显示错误态让用户可以下拉重试
+        songListRef.current?.setStatus('error')
       } else {
         songListRef.current?.setStatus(songs.hasMore ? 'idle' : 'end')
       }
       songListRef.current?.setList(songs.list, songs.page > 1, false)
     }
-  }, [songs.list, songs.loading, songs.hasMore, songs.page, activeTab])
+  }, [songs.list, songs.loading, songs.hasMore, songs.page, songs.error, activeTab])
 
   useEffect(() => {
     const pageIndex = activeTab === 'songs' ? 0 : 1
@@ -115,6 +118,7 @@ export default memo(({
             componentId={componentId}
             albums={albums.list}
             loading={albums.loading}
+            error={albums.error}
             hasMore={albums.hasMore}
             onRefresh={onRefresh}
             onLoadMore={onLoadMoreAlbums}

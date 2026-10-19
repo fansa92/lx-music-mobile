@@ -1,6 +1,41 @@
 import { httpFetch } from '../../request'
 import { decodeName, formatPlayTime, sizeFormate } from '../../index'
 import { formatSingerName } from '../utils'
+import { createHttpFetch } from './util'
+
+// 歌手搜索接口只返回 id 和名字，头像要单独查歌手信息接口。
+// 注意：直接拼 https://imge.kugou.com/stdmusic/400/singer/{id}.jpg 对任何歌手都会返回同一张占位图。
+const singerImgCache = new Map()
+
+const fetchSingerImg = async(singerid) => {
+  const key = String(singerid)
+  if (singerImgCache.has(key)) return singerImgCache.get(key)
+  try {
+    const body = await createHttpFetch(`http://mobiles.kugou.com/api/v5/singer/info?singerid=${key}`)
+    const img = body?.imgurl
+      ? body.imgurl.replace('{size}', '480').replace(/^http:\/\//, 'https://')
+      : ''
+    singerImgCache.set(key, img)
+    return img
+  } catch {
+    singerImgCache.set(key, '')
+    return ''
+  }
+}
+
+// 限制并发，避免一次搜索发出几十个歌手信息请求
+const fetchSingerImgs = async(singerIds, concurrency = 6) => {
+  const result = new Array(singerIds.length)
+  let index = 0
+  const worker = async() => {
+    while (index < singerIds.length) {
+      const current = index++
+      result[current] = await fetchSingerImg(singerIds[current])
+    }
+  }
+  await Promise.all(new Array(Math.min(concurrency, singerIds.length)).fill(0).map(worker))
+  return result
+}
 
 export default {
   limit: 30,
@@ -110,19 +145,21 @@ export default {
     return httpFetch(url).promise.then(({ body }) => {
       if (!body || body.status !== 1) return this.searchArtist(str, page, limit, retryNum)
       const rawList = body.data || []
-      const list = rawList.map(item => ({
-        id: item.singerid,
-        name: item.singername,
-        picUrl: `https://imge.kugou.com/stdmusic/400/singer/${item.singerid}.jpg`,
-        source: 'kg',
-      }))
-      return {
-        list,
-        total: rawList.length < limit ? (page - 1) * limit + rawList.length : (page + 1) * limit,
-        allPage: rawList.length < limit ? page : page + 1,
-        limit,
-        source: 'kg',
-      }
+      return fetchSingerImgs(rawList.map(item => item.singerid)).then(imgs => {
+        const list = rawList.map((item, index) => ({
+          id: item.singerid,
+          name: item.singername,
+          picUrl: imgs[index] || '',
+          source: 'kg',
+        }))
+        return {
+          list,
+          total: rawList.length < limit ? (page - 1) * limit + rawList.length : (page + 1) * limit,
+          allPage: rawList.length < limit ? page : page + 1,
+          limit,
+          source: 'kg',
+        }
+      })
     })
   },
   searchAlbum(str, page = 1, limit = 20, retryNum = 0) {

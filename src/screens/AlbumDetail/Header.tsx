@@ -19,6 +19,7 @@ interface Props {
     artists?: Array<{ id: string, name: string }>
     size?: number
     publishTime?: number
+    source?: string
   }
   componentId: string
 }
@@ -36,7 +37,12 @@ export default memo(({ albumInfo, componentId }: Props) => {
 
   const handleArtistPress = (artist: { id: string, name: string }) => {
     if (!artist.id) return
-    navigations.pushArtistDetailScreen(componentId, { id: String(artist.id), name: artist.name })
+    // 带上 source，否则歌手页会回退到网易接口，kg/tx/kw 的歌手页会取不到数据
+    navigations.pushArtistDetailScreen(componentId, {
+      id: String(artist.id),
+      name: artist.name,
+      source: albumInfo.source,
+    })
   }
 
   return (
