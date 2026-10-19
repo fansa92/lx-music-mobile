@@ -122,10 +122,11 @@ const createTypesFromAudioInfo = (audioInfo) => {
 /**
  * 转换 openapi 接口返回的歌曲列表
  *
- * 兼容两种结构：
+ * 兼容三种结构：
  * - /openapi/kmr/v2/audio_group/author：audio_id、audio_name、album_id 在顶层
  * - /v1/album_audio/lite：audio_id、audio_name、album_id 在 base 里
- * 两者的时长字段也不同（timelength / duration），单位都是毫秒
+ * - /kmr/v1/audio_group/author：字段全部扁平在最外层（音质字段也在顶层）
+ * 时长字段有 timelength / duration 两种，单位都是毫秒
  *
  * @param {Array} rawList
  * @param {string|number} [albumId] 兜底专辑 id（专辑歌曲接口里部分曲目没有 album_id）
@@ -137,12 +138,13 @@ export const filterAudioGroupList = (rawList, albumId, albumName) => {
   rawList.forEach(item => {
     if (!item) return
     const base = item.base || item
-    const audioInfo = item.audio_info || {}
+    // 扁平结构下音质字段与专辑字段都在顶层，直接复用 item
+    const audioInfo = item.audio_info || item
     const audioId = base.audio_id ?? audioInfo.audio_id
     if (!audioId || ids.has(String(audioId))) return
     ids.add(String(audioId))
 
-    const album = item.album_info || {}
+    const album = item.album_info || item
     const authors = (item.authors || []).map(author => author?.base || author)
     const singer = item.author_name || authors.map(author => author?.author_name).filter(Boolean).join('、')
     const duration = parseInt(audioInfo.timelength ?? audioInfo.duration ?? 0)

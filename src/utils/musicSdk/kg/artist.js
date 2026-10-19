@@ -61,9 +61,25 @@ export default {
           replace_need: 1,
         },
         kgTid: 36,
+      }).catch(() => {
+        // 新版接口只能走 gateway，网关不可用时退回旧版接口（字段扁平，同样带音质信息）
+        return createKgGatewayFetch({
+          url: '/kmr/v1/audio_group/author',
+          method: 'post',
+          data: {
+            author_id: Number(id) || id,
+            area_code: 'all',
+            sort: order === 'time' ? 2 : 1,
+            page,
+            pagesize: pageSize,
+          },
+          router: 'openapi.kugou.com',
+          kgTid: 36,
+        })
       })
-      const rawList = body.data?.songs || []
-      const total = body.data?.total ?? body.extra?.page_total ?? 0
+      // 新版返回 { songs, total }，旧版直接返回歌曲数组、总数在顶层
+      const rawList = Array.isArray(body.data) ? body.data : (body.data?.songs || [])
+      const total = (Array.isArray(body.data) ? body.total : body.data?.total) ?? body.extra?.page_total ?? 0
 
       return {
         list: filterAudioGroupList(rawList),

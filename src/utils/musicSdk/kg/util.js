@@ -55,11 +55,17 @@ export const formatKgImg = (url, size = 480) => {
   return url.replace('{size}', String(size)).replace(/^http:\/\//, 'https://')
 }
 
+// 酷狗开放接口有两个入口域名，后端服务一致：
+// - openapi.kugou.com：直连业务服务，兼容性更好
+// - gateway.kugou.com：统一网关，/openapi/** 这类带前缀的路径只能走这里
+const KG_API_HOSTS = ['https://openapi.kugou.com', 'https://gateway.kugou.com']
+
 /**
- * 创建一个带签名的酷狗开放接口请求（gateway.kugou.com）
+ * 创建一个带签名的酷狗开放接口请求（gateway.kugou.com / openapi.kugou.com）
  *
  * 签名规则与官方客户端一致：MD5(盐 + 按 key 排序的 k=v 串 + 请求体 + 盐)
  * 部分接口需要通过 x-router 头路由到对应的后端服务，否则会被网关拒绝（返回空响应）
+ * 除 /openapi/** 前缀的路径外，其余接口会先试 openapi.kugou.com，失败再换 gateway.kugou.com
  *
  * @param {object} options
  * @param {string} options.url 接口路径，如 /kmr/v3/author
@@ -68,7 +74,7 @@ export const formatKgImg = (url, size = 480) => {
  * @param {object} [options.data] 请求体，POST 时使用
  * @param {string} [options.router] x-router 头的值
  * @param {number|string} [options.kgTid] kg-tid 头，接口埋点用
- * @param {string} [options.baseURL] 域名，默认 gateway.kugou.com
+ * @param {string} [options.baseURL] 指定域名，不传则按上面的规则自动选择
  */
 export const createKgGatewayFetch = async({
   url,
@@ -77,7 +83,7 @@ export const createKgGatewayFetch = async({
   data,
   router,
   kgTid,
-  baseURL = 'https://gateway.kugou.com',
+  baseURL,
 }) => {
   const clienttime = Math.floor(Date.now() / 1000)
   const query = Object.assign({
@@ -116,12 +122,26 @@ export const createKgGatewayFetch = async({
   const options = { method, headers }
   if (data) options.body = data
 
-  const { statusCode, body: resBody } = await httpFetch(`${baseURL}${url}?${queryString}`, options).promise
-  if (statusCode !== 200) throw new Error(`http status ${statusCode}`)
-  if ((resBody?.error_code ?? resBody?.errcode ?? 0) !== 0) {
-    throw new Error(resBody?.error_msg || resBody?.errmsg || 'kg api error')
+  const hosts = baseURL
+    ? [baseURL]
+    : url.startsWith('/openapi/')
+      ? ['https://gateway.kugou.com']
+      : KG_API_HOSTS
+
+  let lastError
+  for (const host of hosts) {
+    try {
+      const { statusCode, body: resBody } = await httpFetch(`${host}${url}?${queryString}`, options).promise
+      if (statusCode !== 200) throw new Error(`http status ${statusCode}`)
+      if ((resBody?.error_code ?? resBody?.errcode ?? 0) !== 0) {
+        throw new Error(resBody?.error_msg || resBody?.errmsg || 'kg api error')
+      }
+      return resBody
+    } catch (err) {
+      lastError = err
+    }
   }
-  return resBody
+  throw lastError || new Error('kg api error')
 }
 
 // 酷狗 Web 端搜索接口（complexsearch）的签名盐，与移动端 gateway 的盐不同
