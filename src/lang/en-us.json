@@ -223,6 +223,7 @@
   "search_type_songlist": "Playlist",
   "search_type_artist": "Artist",
   "search_type_album": "Album",
+  "search_artist_count": "{album} albums · {music} songs",
   "setting__other_dislike_list": "Dislike Song Rule",
   "setting__other_dislike_list_label": "Number of rules: {num}",
   "setting__other_dislike_list_saved_tip": "Saved",

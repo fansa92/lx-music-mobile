@@ -5,10 +5,12 @@ import { useTheme } from '@/store/theme/hook'
 import { createStyle } from '@/utils/tools'
 import Text from '@/components/common/Text'
 import Image from '@/components/common/Image'
+import Badge from '@/components/common/Badge'
 import { BorderRadius } from '@/theme'
 import { scaleSizeW } from '@/utils/pixelRatio'
 import { navigations } from '@/navigation'
 import commonState from '@/store/common/state'
+import { useI18n } from '@/lang'
 
 type SearchType = 'artist' | 'album'
 
@@ -75,9 +77,13 @@ const handleItemPress = (searchType: SearchType, item: ListItem) => {
   }
 }
 
-const ArtistItemComp = memo(({ item }: { item: ArtistItem }) => {
+const ArtistItemComp = memo(({ item, showSource }: { item: ArtistItem, showSource: boolean }) => {
   const theme = useTheme()
+  const t = useI18n()
   const alias = item.alias?.length ? item.alias.join('/') : ''
+  const countInfo = (item.albumSize != null || item.musicSize != null)
+    ? t('search_artist_count', { album: item.albumSize ?? 0, music: item.musicSize ?? 0 })
+    : ''
 
   return (
     <TouchableOpacity style={styles.item} onPress={() => { handleItemPress('artist', item) }} activeOpacity={0.6}>
@@ -89,17 +95,14 @@ const ArtistItemComp = memo(({ item }: { item: ArtistItem }) => {
       <View style={styles.itemContent}>
         <Text numberOfLines={1} color={theme['c-font']}>{item.name}</Text>
         {alias ? <Text numberOfLines={1} size={12} color={theme['c-font-label']}>{alias}</Text> : null}
-        {item.albumSize != null ? (
-          <Text size={11} color={theme['c-font-label']}>
-            {item.albumSize} {item.albumSize > 1 ? 'albums' : 'album'}
-          </Text>
-        ) : null}
+        {countInfo ? <Text numberOfLines={1} size={11} color={theme['c-font-label']}>{countInfo}</Text> : null}
       </View>
+      {showSource ? <Badge type="tertiary">{item.source}</Badge> : null}
     </TouchableOpacity>
   )
 })
 
-const AlbumItemComp = memo(({ item }: { item: AlbumItem }) => {
+const AlbumItemComp = memo(({ item, showSource }: { item: AlbumItem, showSource: boolean }) => {
   const theme = useTheme()
 
   return (
@@ -116,12 +119,14 @@ const AlbumItemComp = memo(({ item }: { item: AlbumItem }) => {
           <Text size={11} color={theme['c-font-label']}>{item.publishTime}</Text>
         ) : null}
       </View>
+      {showSource ? <Badge type="tertiary">{item.source}</Badge> : null}
     </TouchableOpacity>
   )
 })
 
 export default forwardRef<SearchResultListType, SearchResultListProps>(({ searchType }, ref) => {
   const [list, setList] = useState<ListItem[]>([])
+  const [showSource, setShowSource] = useState(false)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const searchInfoRef = useRef({ text: '', page: 1, hasMore: true, source: 'kw' as string })
@@ -174,6 +179,8 @@ export default forwardRef<SearchResultListType, SearchResultListProps>(({ search
     loadList(text: string, source: string) {
       searchInfoRef.current = { text, page: 1, hasMore: true, source }
       setList([])
+      // 聚合搜索时才展示来源标签，与歌曲/歌单列表保持一致
+      setShowSource(source === 'all')
       handleLoad(text, 1, source, true)
     },
   }))
@@ -192,9 +199,9 @@ export default forwardRef<SearchResultListType, SearchResultListProps>(({ search
 
   const renderItem = ({ item }: { item: ListItem }) => {
     if (searchType === 'artist') {
-      return <ArtistItemComp item={item as ArtistItem} />
+      return <ArtistItemComp item={item as ArtistItem} showSource={showSource} />
     }
-    return <AlbumItemComp item={item as AlbumItem} />
+    return <AlbumItemComp item={item as AlbumItem} showSource={showSource} />
   }
 
   const keyExtractor = (item: ListItem) => `${item.source}_${item.id}`
