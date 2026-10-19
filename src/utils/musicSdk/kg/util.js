@@ -207,6 +207,28 @@ export const createKgWebFetch = async({
 }
 
 /**
+ * 酷狗移动端站点的公开接口（mobiles.kugou.com/api/v5），不需要签名
+ * 作为开放接口（openapi/gateway）都不可用时的最后兜底
+ *
+ * @param {string} path 接口路径，如 /api/v5/singer/info
+ * @param {object} [params] 查询参数
+ */
+export const createKgMobileFetch = async(path, params = {}) => {
+  const queryString = Object.keys(params)
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+    .join('&')
+  const { statusCode, body } = await httpFetch(`https://mobiles.kugou.com${path}${queryString ? `?${queryString}` : ''}`, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+    },
+  }).promise
+  if (statusCode !== 200) throw new Error(`http status ${statusCode}`)
+  if (body?.status !== 1) throw new Error(body?.error || 'kg mobile api error')
+  return body.data
+}
+
+/**
  * 创建一个适用于KG的Http请求
  * @param {*} url
  * @param {*} options

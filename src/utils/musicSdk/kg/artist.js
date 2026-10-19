@@ -1,5 +1,5 @@
-import { filterAudioGroupList } from './musicInfo'
-import { createKgGatewayFetch, formatKgImg } from './util'
+import { filterAudioGroupList, filterSingerSongList } from './musicInfo'
+import { createKgGatewayFetch, createKgMobileFetch, formatKgImg } from './util'
 
 // 歌手歌曲接口单页最多 100 首，超过会返回 error_code=20010
 const SONG_PAGE_LIMIT = 100
@@ -35,7 +35,22 @@ export default {
         musicSize: info.song_count || 0,
       }
     } catch (err) {
-      return this.getDetail(id, name, retryNum + 1)
+      try {
+        // 开放接口都不可用时，退回 mobiles.kugou.com 的公开接口
+        const info = await createKgMobileFetch('/api/v5/singer/info', { singerid: Number(id) || id })
+        if (!info?.singername) throw new Error('获取歌手信息失败')
+        return {
+          source: 'kg',
+          id,
+          name: info.singername,
+          desc: info.intro || '',
+          img: formatKgImg(info.imgurl),
+          albumSize: info.albumcount || 0,
+          musicSize: info.songcount || 0,
+        }
+      } catch (e) {
+        return this.getDetail(id, name, retryNum + 1)
+      }
     }
   },
 
@@ -87,7 +102,26 @@ export default {
         hasMore: page * pageSize < total,
       }
     } catch (err) {
-      return this.getSongs(id, order, limit, offset, name, retryNum + 1)
+      try {
+        // 最后兜底：mobiles.kugou.com 的公开接口，字段扁平、自带音质与 hash，但不支持排序
+        const pageSize = Math.min(limit, SONG_PAGE_LIMIT)
+        const page = Math.floor(offset / pageSize) + 1
+        const data = await createKgMobileFetch('/api/v5/singer/song', {
+          singerid: Number(id) || id,
+          page,
+          pagesize: pageSize,
+        })
+        const rawList = data?.info || []
+        if (!rawList.length) throw new Error('获取歌手歌曲失败')
+        const total = data.total || 0
+        return {
+          list: filterSingerSongList(rawList, name),
+          total,
+          hasMore: page * pageSize < total,
+        }
+      } catch (e) {
+        return this.getSongs(id, order, limit, offset, name, retryNum + 1)
+      }
     }
   },
 
@@ -130,7 +164,35 @@ export default {
         hasMore: page * pageSize < total,
       }
     } catch (err) {
-      return this.getAlbums(id, limit, offset, name, retryNum + 1)
+      try {
+        // 最后兜底：mobiles.kugou.com 的公开接口
+        const pageSize = Math.min(limit, ALBUM_PAGE_LIMIT)
+        const page = Math.floor(offset / pageSize) + 1
+        const data = await createKgMobileFetch('/api/v5/singer/album', {
+          singerid: Number(id) || id,
+          page,
+          pagesize: pageSize,
+        })
+        const rawList = data?.info || []
+        if (!rawList.length) throw new Error('获取歌手专辑失败')
+        const total = data.total || 0
+        return {
+          hotAlbums: rawList.map(item => ({
+            id: item.albumid,
+            name: item.albumname,
+            picUrl: formatKgImg(item.imgurl),
+            artistName: item.singername || name || '',
+            artistId: String(item.singerid ?? id),
+            artists: [{ id: String(item.singerid ?? id), name: item.singername || name || '' }],
+            size: item.songcount || 0,
+            publishTime: parseTime(item.publishtime),
+            source: 'kg',
+          })),
+          hasMore: page * pageSize < total,
+        }
+      } catch (e) {
+        return this.getAlbums(id, limit, offset, name, retryNum + 1)
+      }
     }
   },
 }

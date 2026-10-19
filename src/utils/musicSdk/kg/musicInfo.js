@@ -170,6 +170,62 @@ export const filterAudioGroupList = (rawList, albumId, albumName) => {
   return list
 }
 
+/**
+ * 转换 mobiles.kugou.com/api/v5/singer/song 返回的歌曲列表
+ *
+ * 这个接口是扁平结构，音质字段名与开放接口不同（320filesize / sqfilesize），
+ * 时长字段 duration 单位是秒；不带歌手名，只能从 filename（"歌手 - 歌名"）里拆
+ *
+ * @param {Array} rawList
+ * @param {string} [fallbackSinger] filename 里拆不出歌手时的兜底歌手名
+ */
+export const filterSingerSongList = (rawList, fallbackSinger = '') => {
+  const ids = new Set()
+  const list = []
+  rawList.forEach(item => {
+    if (!item) return
+    const audioId = item.audio_id
+    if (!audioId || ids.has(String(audioId))) return
+    ids.add(String(audioId))
+
+    const filename = String(item.filename || '')
+    const splitIndex = filename.indexOf(' - ')
+    const singer = splitIndex > -1 ? filename.slice(0, splitIndex) : fallbackSinger
+    const name = splitIndex > -1 ? filename.slice(splitIndex + 3) : (item.songname || filename)
+
+    const types = []
+    const _types = {}
+    const add = (type, size, hash) => {
+      if (!hash || !size) return
+      const sizeText = sizeFormate(parseInt(size))
+      types.push({ type, size: sizeText, hash })
+      _types[type] = { size: sizeText, hash }
+    }
+    add('128k', item.filesize, item.hash)
+    add('320k', item['320filesize'], item['320hash'])
+    add('flac', item.sqfilesize, item.sqhash)
+    add('flac24bit', item.filesize_high, item.hash_high)
+
+    list.push({
+      singer: decodeName(singer),
+      name: decodeName(name),
+      albumName: decodeName(item.album_name || ''),
+      albumId: item.album_id,
+      songmid: audioId,
+      source: 'kg',
+      interval: formatPlayTime(parseInt(item.duration) || 0),
+      img: formatKgImg(item.trans_param?.union_cover) || null,
+      lrc: null,
+      hash: item.hash,
+      otherSource: null,
+      types,
+      _types,
+      typeUrl: {},
+    })
+  })
+  return list
+}
+
 export const getMusicInfos = async(hashs) => {
   return filterMusicInfoList(await Promise.all(createGetMusicInfosTask(hashs)).then(data => data.flat()))
 }
