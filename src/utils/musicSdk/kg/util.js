@@ -124,6 +124,68 @@ export const createKgGatewayFetch = async({
   return resBody
 }
 
+// 酷狗 Web 端搜索接口（complexsearch）的签名盐，与移动端 gateway 的盐不同
+const KG_WEB_SALT = 'NVPh5oo715z5DIWAeQlhMDsWXXQV4hwt'
+const KG_WEB_SRCAPPID = 2919
+const KG_WEB_CLIENTVER = 2000
+
+// mid/uuid 是 Web 端用来标识客户端的随机串，同一个进程内固定即可
+let webMid = ''
+const getWebMid = () => {
+  if (!webMid) webMid = toMD5(`${Date.now()}${Math.random()}`)
+  return webMid
+}
+
+/**
+ * 创建一个走酷狗 Web 搜索接口的请求（complexsearch.kugou.com）
+ *
+ * 与 gateway.kugou.com 的移动端网关相比，这里只需要 Web 端的签名参数，
+ * 不需要 x-router / kg-tid 等 App 专有请求头，兼容性更好
+ * 签名规则：MD5(Web盐 + 按 key 排序的 k=v 串 + Web盐)
+ *
+ * @param {object} options
+ * @param {string} options.url 接口路径，如 /v1/search/author
+ * @param {object} [options.params] 查询参数
+ * @param {string} [options.baseURL] 域名，默认 complexsearch.kugou.com
+ */
+export const createKgWebFetch = async({
+  url,
+  params = {},
+  baseURL = 'https://complexsearch.kugou.com',
+}) => {
+  const clienttime = Date.now()
+  const mid = getWebMid()
+  const query = Object.assign({
+    srcappid: KG_WEB_SRCAPPID,
+    clientver: KG_WEB_CLIENTVER,
+    clienttime,
+    mid,
+    uuid: mid,
+    dfid: '-',
+  }, params)
+  const signText = Object.keys(query)
+    .sort()
+    .map(key => `${key}=${query[key]}`)
+    .join('')
+  query.signature = toMD5(`${KG_WEB_SALT}${signText}${KG_WEB_SALT}`)
+
+  const queryString = Object.keys(query)
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(query[key])}`)
+    .join('&')
+
+  const { statusCode, body: resBody } = await httpFetch(`${baseURL}${url}?${queryString}`, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+    },
+  }).promise
+  if (statusCode !== 200) throw new Error(`http status ${statusCode}`)
+  if ((resBody?.error_code ?? resBody?.errcode ?? 0) !== 0) {
+    throw new Error(resBody?.error_msg || resBody?.errmsg || 'kg api error')
+  }
+  return resBody
+}
+
 /**
  * 创建一个适用于KG的Http请求
  * @param {*} url

@@ -1,7 +1,7 @@
 import { httpFetch } from '../../request'
 import { decodeName, formatPlayTime, sizeFormate } from '../../index'
 import { formatSingerName } from '../utils'
-import { createKgGatewayFetch, formatKgImg } from './util'
+import { createKgGatewayFetch, createKgWebFetch, formatKgImg } from './util'
 
 export default {
   limit: 30,
@@ -105,12 +105,33 @@ export default {
       })
     })
   },
-  searchArtist(str, page = 1, limit = 20, retryNum = 0) {
-    if (++retryNum > 3) return Promise.reject(new Error('try max num'))
+  searchArtist(str, page = 1, limit = 20) {
     const keyword = String(str ?? '').trim()
     // 关键词为空时接口返回 151 Empty Keyword，直接给空结果，避免无意义的重试
     if (!keyword) return Promise.resolve({ list: [], total: 0, allPage: 0, limit, source: 'kg' })
-    // 移动端歌手搜索接口一次就能带回头像、专辑数和歌曲数，不用再逐个查歌手信息
+    // 依次尝试：Web 搜索接口 → App 网关 → 移动端搜索接口
+    // 部分网络环境下 gateway.kugou.com 不可达，直接表现为一直 No results
+    return this.searchArtistByWeb(keyword, page, limit)
+      .catch(() => this.searchArtistByApp(keyword, page, limit))
+      .catch(() => this.searchArtistByMobile(keyword, page, limit))
+      .catch(() => ({ list: [], total: 0, allPage: 0, limit, source: 'kg' }))
+  },
+  searchArtistByWeb(keyword, page, limit) {
+    // Web 端接口只需要签名参数，不依赖 x-router / kg-tid 等 App 专有请求头，兼容性最好
+    return createKgWebFetch({
+      url: '/v1/search/author',
+      params: {
+        albumhide: 0,
+        iscorrection: 1,
+        keyword,
+        nocollect: 0,
+        page,
+        pagesize: limit,
+        platform: 'WebFilter',
+      },
+    }).then(body => this.handleArtistSearchResult(body, limit))
+  },
+  searchArtistByApp(keyword, page, limit) {
     return createKgGatewayFetch({
       url: '/v1/search/author',
       params: {
@@ -123,17 +144,48 @@ export default {
         platform: 'AndroidFilter',
       },
       router: 'complexsearch.kugou.com',
-    }).then(body => {
-      const rawList = body.data?.lists || []
-      const total = body.data?.total ?? 0
+    }).then(body => this.handleArtistSearchResult(body, limit))
+  },
+  /**
+   * 移动端搜索接口，只能拿到歌手 id 与名字，作为前两个接口都不可用时的兜底
+   * 目的是不让搜索结果页出现空列表
+   */
+  searchArtistByMobile(keyword, page, limit) {
+    const url = `https://msearch.kugou.com/api/v3/search/singer?keyword=${encodeURIComponent(keyword)}&page=${page}&pagesize=${limit}&showtype=1&version=9108`
+    return httpFetch(url).promise.then(({ body }) => {
+      const rawList = body?.data
+      if (!Array.isArray(rawList) || !rawList.length) throw new Error('kg singer search empty')
+      const list = rawList
+        .filter(item => item?.singername)
+        .map(item => ({
+          id: item.singerid,
+          name: String(item.singername).trim(),
+          picUrl: '',
+          albumSize: 0,
+          musicSize: 0,
+          source: 'kg',
+        }))
+      if (!list.length) throw new Error('kg singer search empty')
       return {
-        list: this.filterArtistList(rawList),
-        total,
-        allPage: Math.ceil(total / limit),
+        list,
+        total: list.length,
+        allPage: 1,
         limit,
         source: 'kg',
       }
-    }).catch(() => this.searchArtist(keyword, page, limit, retryNum))
+    })
+  },
+  handleArtistSearchResult(body, limit) {
+    const rawList = body?.data?.lists || []
+    const total = body?.data?.total ?? 0
+    const list = this.filterArtistList(rawList)
+    return {
+      list,
+      total,
+      allPage: Math.ceil(total / limit),
+      limit,
+      source: 'kg',
+    }
   },
   /**
    * 歌手搜索结果清洗

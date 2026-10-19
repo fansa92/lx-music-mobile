@@ -130,6 +130,10 @@ export default forwardRef<SearchResultListType, SearchResultListProps>(({ search
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const searchInfoRef = useRef({ text: '', page: 1, hasMore: true, source: 'kw' as string })
+  // 用 ref 做并发锁，避免 onEndReached 连发时重复请求同一页
+  const loadingRef = useRef(false)
+  // 请求序号，用于丢弃过期响应
+  const genRef = useRef(0)
   const theme = useTheme()
 
   const doSearch = useCallback(async(text: string, page: number, source: string): Promise<SearchResult> => {
@@ -158,22 +162,32 @@ export default forwardRef<SearchResultListType, SearchResultListProps>(({ search
   }, [searchType])
 
   const handleLoad = useCallback((text: string, page: number, source: string, isRefresh = false) => {
-    if (loading || (!isRefresh && !searchInfoRef.current.hasMore)) return
+    if (!isRefresh) {
+      if (loadingRef.current || !searchInfoRef.current.hasMore) return
+    }
+    // 每次加载分配一个序号，新的搜索/刷新会让旧请求的结果失效，避免旧响应覆盖新列表
+    const gen = ++genRef.current
+    loadingRef.current = true
     setLoading(true)
     if (isRefresh) setRefreshing(true)
 
     doSearch(text, page, source).then(result => {
-      const newList = isRefresh ? result.list : [...list, ...result.list]
-      setList(newList)
+      if (gen !== genRef.current) return
+      setList(prev => isRefresh ? result.list : [...prev, ...result.list])
       searchInfoRef.current.page = page + 1
       searchInfoRef.current.hasMore = result.list.length > 0 && page < result.allPage
     }).catch((err) => {
+      if (gen !== genRef.current) return
+      // 请求失败后停止自动翻页，否则列表为空时 onEndReached 会被反复触发，表现为一直刷新
+      searchInfoRef.current.hasMore = false
       console.log('SearchResultList error:', err)
     }).finally(() => {
+      if (gen !== genRef.current) return
+      loadingRef.current = false
       setLoading(false)
       setRefreshing(false)
     })
-  }, [loading, list, doSearch])
+  }, [doSearch])
 
   useImperativeHandle(ref, () => ({
     loadList(text: string, source: string) {
