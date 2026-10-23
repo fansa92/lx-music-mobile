@@ -1,13 +1,43 @@
-name: Build
+name: Release
 
 on:
   push:
     branches:
       - master
+      - ios-adaptation
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 1.0.0，留空则使用 package.json 中的版本)'
+        required: false
+        type: string
+      publish:
+        description: '构建完成后创建 GitHub Release'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NO_FLIPPER: 1
+  IOS_SCHEME: LxMusicMobile
+  IOS_WORKSPACE: ios/LxMusicMobile.xcworkspace
+  IOS_BUNDLE_IDENTIFIER: cn.toside.music.mobile
+  DERIVED_DATA_PATH: build/DerivedData
 
 jobs:
-  Android:
-    name: Android
+  # Android 多 ABI 编译：单次 gradle 构建同时产出
+  # arm64-v8a / armeabi-v7a / x86_64 / x86 / universal
+  android:
+    name: Android (multi-ABI)
     runs-on: ubuntu-latest
     steps:
       - name: Check out git repository
@@ -16,6 +46,15 @@ jobs:
       - name: Setup Env
         uses: ./.github/actions/setup
 
+      - name: Apply version override
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            npm pkg set version="${{ inputs.version }}"
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+
       - name: Build Packages
         env:
           DISABLE_SVG: 1
@@ -23,23 +62,12 @@ jobs:
         run: |
           cd android
           echo ${{ secrets.KEYSTORE_STORE_FILE_BASE64 }} | base64 --decode > app/${{ secrets.KEYSTORE_STORE_FILE }}
-          ./gradlew assembleRelease -PMYAPP_UPLOAD_STORE_FILE='${{ secrets.KEYSTORE_STORE_FILE }}' -PMYAPP_UPLOAD_KEY_ALIAS='${{ secrets.KEYSTORE_KEY_ALIAS }}' -PMYAPP_UPLOAD_STORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}' -PMYAPP_UPLOAD_KEY_PASSWORD='${{ secrets.KEYSTORE_KEY_PASSWORD }}'
+          ./gradlew assembleRelease \
+            -PMYAPP_UPLOAD_STORE_FILE='${{ secrets.KEYSTORE_STORE_FILE }}' \
+            -PMYAPP_UPLOAD_KEY_ALIAS='${{ secrets.KEYSTORE_KEY_ALIAS }}' \
+            -PMYAPP_UPLOAD_STORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}' \
+            -PMYAPP_UPLOAD_KEY_PASSWORD='${{ secrets.KEYSTORE_KEY_PASSWORD }}'
           rm -f app/${{ secrets.KEYSTORE_STORE_FILE }}
-
-      # Push tag to GitHub if package.json version's tag is not tagged
-      - name: Get package version
-        run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
-
-      - name: Create git tag
-        uses: pkgdeps/git-tag-action@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          github_repo: ${{ github.repository }}
-          version: ${{ env.PACKAGE_VERSION }}
-          git_commit_sha: ${{ github.sha }}
-          git_tag_prefix: "v"
 
       - name: Generate file MD5
         run: |
@@ -51,105 +79,195 @@ jobs:
         env:
           PACKAGE_VERSION: ${{ env.PACKAGE_VERSION }}
 
-  # Android_SL:
-  #   name: Android_SL
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Check out git repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         ref: statusbar_lyric
+  ios:
+    name: iOS IPA
+    runs-on: macos-14
+    env:
+      # IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
+      # IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+      # IOS_MOBILEPROVISION_BASE64: ${{ secrets.IOS_MOBILEPROVISION_BASE64 }}
+      # IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      # IOS_BUNDLE_IDENTIFIER_SECRET: ${{ secrets.IOS_BUNDLE_IDENTIFIER }}
+      # IOS_EXPORT_METHOD_SECRET: ${{ secrets.IOS_EXPORT_METHOD }}
+      ARCHIVE_PATH: build/LxMusicMobile.xcarchive
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v4
 
-  #     - name: Setup Env
-  #       uses: ./.github/actions/setup
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
 
-  #     - name: Build Packages
-  #       shell: bash
-  #       run: |
-  #         cd android
-  #         echo ${{ secrets.KEYSTORE_STORE_FILE_BASE64 }} | base64 --decode > app/${{ secrets.KEYSTORE_STORE_FILE }}
-  #         ./gradlew assembleRelease -PMYAPP_UPLOAD_STORE_FILE='${{ secrets.KEYSTORE_STORE_FILE }}' -PMYAPP_UPLOAD_KEY_ALIAS='${{ secrets.KEYSTORE_KEY_ALIAS }}' -PMYAPP_UPLOAD_STORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}' -PMYAPP_UPLOAD_KEY_PASSWORD='${{ secrets.KEYSTORE_KEY_PASSWORD }}'
-  #         rm -f app/${{ secrets.KEYSTORE_STORE_FILE }}
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
 
-  #     # Push tag to GitHub if package.json version's tag is not tagged
-  #     - name: Get package version
-  #       run: |
-  #         node -p -e '`PACKAGE_VERSION=${require("./package.json").version}`' >> $GITHUB_ENV
-  #         echo "COMMIT_SHA=$(git show -s --format=%H)" >> $GITHUB_ENV
+      - name: Apply version override
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            npm pkg set version="${{ inputs.version }}"
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_VERSION_CODE=$(node -p "require('./package.json').versionCode")
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION_CODE=$PACKAGE_VERSION_CODE" >> "$GITHUB_ENV"
 
-  #     - name: Create git tag
-  #       uses: pkgdeps/git-tag-action@v3
-  #       with:
-  #         github_token: ${{ secrets.GITHUB_TOKEN }}
-  #         github_repo: ${{ github.repository }}
-  #         version: ${{ env.PACKAGE_VERSION }}
-  #         git_commit_sha: ${{ env.COMMIT_SHA }}
-  #         git_tag_prefix: "v"
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --no-fund
 
-  #     - name: Generate file MD5
-  #       run: |
-  #         echo "current commit sha: ${{ env.COMMIT_SHA }}"
-  #         cd android/app/build/outputs/apk/release
-  #         md5sum *.apk
+      - name: Install CocoaPods dependencies
+        shell: bash
+        run: |
+          cd ios
+          bundle exec pod install --repo-update
 
-  #     - name: Upload Artifact
-  #       uses: ./.github/actions/upload-artifact
-  #       env:
-  #         PACKAGE_TYPE: 'Android_SL'
-  #         PACKAGE_VERSION: ${{ env.PACKAGE_VERSION }}
+      - name: Build unsigned iOS app
+        shell: bash
+        run: |
+          mkdir -p build
+          set -o pipefail
+          xcodebuild \
+            -workspace "$IOS_WORKSPACE" \
+            -scheme "$IOS_SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_IDENTIFIER" \
+            MARKETING_VERSION="$PACKAGE_VERSION" \
+            CURRENT_PROJECT_VERSION="$PACKAGE_VERSION_CODE" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            NODE_BINARY="$(which node)" \
+            clean build 2>&1 | tee build/xcodebuild.log
 
-  # Android_5:
-  #   name: Android_5
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Check out git repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         ref: android_5
+      - name: Show first Xcode errors
+        if: failure()
+        shell: bash
+        run: |
+          echo "===== Xcode errors ====="
+          grep -n -C 3 "error:" build/xcodebuild.log | head -120 || true
 
-  #     - name: Setup Env
-  #       uses: ./.github/actions/setup
+      - name: Upload Xcode build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: build/xcodebuild.log
+          if-no-files-found: ignore
 
-  #     - name: Build Packages
-  #       shell: bash
-  #       run: |
-  #         cd android
-  #         echo ${{ secrets.KEYSTORE_STORE_FILE_BASE64 }} | base64 --decode > app/${{ secrets.KEYSTORE_STORE_FILE }}
-  #         ./gradlew assembleRelease -PMYAPP_UPLOAD_STORE_FILE='${{ secrets.KEYSTORE_STORE_FILE }}' -PMYAPP_UPLOAD_KEY_ALIAS='${{ secrets.KEYSTORE_KEY_ALIAS }}' -PMYAPP_UPLOAD_STORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}' -PMYAPP_UPLOAD_KEY_PASSWORD='${{ secrets.KEYSTORE_KEY_PASSWORD }}'
-  #         rm -f app/${{ secrets.KEYSTORE_STORE_FILE }}
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          APP_PATH="$(find "$DERIVED_DATA_PATH/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          rm -rf build/Payload
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          (
+            cd build
+            zip -qry "lx-music-mobile-v${PACKAGE_VERSION}-ios-unsigned.ipa" Payload
+          )
 
-  #     # Push tag to GitHub if package.json version's tag is not tagged
-  #     - name: Get package version
-  #       run: |
-  #         node -p -e '`PACKAGE_VERSION=${require("./package.json").version}`' >> $GITHUB_ENV
-  #         echo "COMMIT_SHA=$(git show -s --format=%H)" >> $GITHUB_ENV
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-v${{ env.PACKAGE_VERSION }}-unsigned
+          path: build/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-ios-unsigned.ipa
 
-  #     - name: Create git tag
-  #       uses: pkgdeps/git-tag-action@v3
-  #       with:
-  #         github_token: ${{ secrets.GITHUB_TOKEN }}
-  #         github_repo: ${{ github.repository }}
-  #         version: ${{ env.PACKAGE_VERSION }}
-  #         git_commit_sha: ${{ env.COMMIT_SHA }}
-  #         git_tag_prefix: "v"
+      # 自签分发流程：取消注释并配置上面 env 里的 6 个 iOS secrets 后启用
+      # - name: Install signing certificate
+      #   if: ${{ env.IOS_P12_BASE64 != '' && env.IOS_P12_PASSWORD != '' && env.IOS_MOBILEPROVISION_BASE64 != '' && env.IOS_TEAM_ID != '' }}
+      #   shell: bash
+      #   run: |
+      #     KEYCHAIN_PATH="$RUNNER_TEMP/ios-build.keychain-db"
+      #     CERT_PATH="$RUNNER_TEMP/ios-build.p12"
+      #     PROFILE_PATH="$RUNNER_TEMP/ios-build.mobileprovision"
+      #     echo "$IOS_P12_BASE64" | base64 --decode > "$CERT_PATH"
+      #     echo "$IOS_MOBILEPROVISION_BASE64" | base64 --decode > "$PROFILE_PATH"
+      #
+      #     mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+      #     security create-keychain -p "" "$KEYCHAIN_PATH"
+      #     security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+      #     security unlock-keychain -p "" "$KEYCHAIN_PATH"
+      #     security import "$CERT_PATH" -P "$IOS_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+      #     security default-keychain -s "$KEYCHAIN_PATH"
+      #     security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+      #     security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+      #
+      #     security cms -D -i "$PROFILE_PATH" > "$RUNNER_TEMP/profile.plist"
+      #     PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+      #     cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 
-  #     - name: Generate file MD5
-  #       run: |
-  #         echo "current commit sha: ${{ env.COMMIT_SHA }}"
-  #         cd android/app/build/outputs/apk/release
-  #         md5sum *.apk
+      # - name: Archive signed app
+      #   if: ${{ env.IOS_P12_BASE64 != '' && env.IOS_P12_PASSWORD != '' && env.IOS_MOBILEPROVISION_BASE64 != '' && env.IOS_TEAM_ID != '' }}
+      #   shell: bash
+      #   run: |
+      #     BUNDLE_IDENTIFIER="${IOS_BUNDLE_IDENTIFIER_SECRET:-cn.toside.music.mobile}"
+      #     xcodebuild \
+      #       -workspace "$IOS_WORKSPACE" \
+      #       -scheme "$IOS_SCHEME" \
+      #       -configuration Release \
+      #       -destination 'generic/platform=iOS' \
+      #       -archivePath "$ARCHIVE_PATH" \
+      #       DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+      #       PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_IDENTIFIER" \
+      #       MARKETING_VERSION="$PACKAGE_VERSION" \
+      #       CURRENT_PROJECT_VERSION="$PACKAGE_VERSION_CODE" \
+      #       clean archive
 
-  #     - name: Upload Artifact
-  #       uses: ./.github/actions/upload-artifact
-  #       env:
-  #         PACKAGE_TYPE: 'Android_5'
-  #         PACKAGE_VERSION: ${{ env.PACKAGE_VERSION }}
+      # - name: Export signed IPA
+      #   if: ${{ env.IOS_P12_BASE64 != '' && env.IOS_P12_PASSWORD != '' && env.IOS_MOBILEPROVISION_BASE64 != '' && env.IOS_TEAM_ID != '' }}
+      #   shell: bash
+      #   run: |
+      #     EXPORT_METHOD="${IOS_EXPORT_METHOD_SECRET:-ad-hoc}"
+      #     cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+      #     <?xml version="1.0" encoding="UTF-8"?>
+      #     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      #     <plist version="1.0">
+      #     <dict>
+      #       <key>method</key>
+      #       <string>${EXPORT_METHOD}</string>
+      #       <key>signingStyle</key>
+      #       <string>automatic</string>
+      #       <key>stripSwiftSymbols</key>
+      #       <true/>
+      #       <key>teamID</key>
+      #       <string>${IOS_TEAM_ID}</string>
+      #       <key>compileBitcode</key>
+      #       <false/>
+      #     </dict>
+      #     </plist>
+      #     EOF
+      #
+      #     mkdir -p build/export
+      #     xcodebuild \
+      #       -exportArchive \
+      #       -archivePath "$ARCHIVE_PATH" \
+      #       -exportPath build/export \
+      #       -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+      #
+      #     IPA_PATH="$(find build/export -maxdepth 1 -name '*.ipa' -print -quit)"
+      #     test -n "$IPA_PATH"
+      #     cp "$IPA_PATH" "build/lx-music-mobile-v${PACKAGE_VERSION}-ios-signed.ipa"
 
-  Release:
+      # - name: Upload signed IPA artifact
+      #   if: ${{ env.IOS_P12_BASE64 != '' && env.IOS_P12_PASSWORD != '' && env.IOS_MOBILEPROVISION_BASE64 != '' && env.IOS_TEAM_ID != '' }}
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: ios-ipa-v${{ env.PACKAGE_VERSION }}-signed
+      #     path: build/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-ios-signed.ipa
+
+  release:
     name: Release
     runs-on: ubuntu-latest
-    # needs: [Android, Android_SL]
-    needs: [Android]
+    needs: [android, ios]
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
     steps:
       - name: Check out git repository
         uses: actions/checkout@v4
@@ -160,18 +278,22 @@ jobs:
           path: ./artifacts
           merge-multiple: true
 
+      - name: Apply version override
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            npm pkg set version="${{ inputs.version }}"
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> "$GITHUB_ENV"
+
       - name: Generate file MD5
         run: |
           echo -e '\n### File MD5\n```' >> ./publish/changeLog.md
           cd artifacts
-          md5sum *.apk >> ../publish/changeLog.md
+          md5sum *.apk *.ipa >> ../publish/changeLog.md
           echo -e '```\n' >> ../publish/changeLog.md
           echo -e '\n[软件安装包说明](https://lyswhut.github.io/lx-music-doc/download#%E8%BD%AF%E4%BB%B6%E5%AE%89%E8%A3%85%E5%8C%85%E8%AF%B4%E6%98%8E)\n' >> ../publish/changeLog.md
-
-      - name: Get package version
-        run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -186,8 +308,6 @@ jobs:
             artifacts/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-x86_64.apk
             artifacts/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-x86.apk
             artifacts/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-universal.apk
-
-          # artifacts/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-sl-arm64-v8a.apk
-          # artifacts/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-android_5-universal.apk
+            artifacts/lx-music-mobile-v${{ env.PACKAGE_VERSION }}-ios-unsigned.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
