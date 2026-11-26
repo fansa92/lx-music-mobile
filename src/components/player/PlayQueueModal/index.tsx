@@ -37,7 +37,7 @@ const ListItem = memo(({ item, index, activeIndex, onPress }: {
           : <Text style={styles.sn} size={13} color={theme['c-300']}>{index + 1}</Text>
       }
       <View style={styles.itemInfo}>
-        <Text color={active ? theme['c-primary-font'] : theme['c-font']} numberOfLines={1} size={14}>{item.name}</Text>
+        <Text style={styles.itemName} color={active ? theme['c-primary-font'] : theme['c-font']} numberOfLines={1} size={14}>{item.name}</Text>
         <View style={styles.listItemSingle}>
           <Badge>{item.source.toUpperCase()}</Badge>
           <Text style={styles.listItemSingleText} size={11} color={active ? theme['c-primary-alpha-200'] : theme['c-500']} numberOfLines={1}>
@@ -47,7 +47,7 @@ const ListItem = memo(({ item, index, activeIndex, onPress }: {
       </View>
       {
         item.interval ? (
-          <Text size={12} color={active ? theme['c-primary-alpha-400'] : theme['c-250']} numberOfLines={1}>{item.interval}</Text>
+          <Text style={styles.duration} size={12} color={active ? theme['c-primary-alpha-400'] : theme['c-250']} numberOfLines={1}>{item.interval}</Text>
         ) : null
       }
     </TouchableOpacity>
@@ -147,7 +147,7 @@ export default forwardRef<PlayQueueModalType, {}>((props, ref) => {
       onRequestClose={closeDrawer}
       supportedOrientations={supportedOrientations}
     >
-      <View style={{ flex: 1, paddingTop: statusBarHeight }}>
+      <View style={{ flex: 1 }}>
         <Animated.View
           pointerEvents="auto"
           style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: overlayOpacity }}
@@ -157,7 +157,7 @@ export default forwardRef<PlayQueueModalType, {}>((props, ref) => {
         <Animated.View
           style={{
             position: 'absolute',
-            top: 0,
+            top: statusBarHeight,
             right: 0,
             bottom: 0,
             width: drawerWidth,
@@ -172,6 +172,7 @@ export default forwardRef<PlayQueueModalType, {}>((props, ref) => {
           </View>
           <FlatList
             style={styles.list}
+            contentContainerStyle={styles.listContent}
             data={list}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
@@ -200,6 +201,9 @@ const styles = createStyle({
   list: {
     flex: 1,
   },
+  listContent: {
+    paddingBottom: Platform.OS === 'ios' ? scaleSizeH(20) : scaleSizeH(6),
+  },
   listItem: {
     flexDirection: 'row',
     flexWrap: 'nowrap',
@@ -209,14 +213,22 @@ const styles = createStyle({
   },
   sn: {
     width: 38,
+    flexShrink: 0,
     textAlign: 'center',
     paddingLeft: 3,
     paddingRight: 3,
   },
   itemInfo: {
+    // flexBasis: 0 是关键：否则 Text 的内容宽度会成为最小宽度，
+    // 长歌名/歌手名无法收缩，把右侧时长挤出抽屉边界
     flexGrow: 1,
     flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     paddingRight: 2,
+  },
+  itemName: {
+    flexShrink: 1,
   },
   listItemSingle: {
     paddingTop: 2,
@@ -226,6 +238,14 @@ const styles = createStyle({
   listItemSingleText: {
     flexGrow: 0,
     flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     fontWeight: '300',
+  },
+  duration: {
+    flexShrink: 0,
+    minWidth: 38,
+    marginLeft: 6,
+    textAlign: 'right',
   },
 })
